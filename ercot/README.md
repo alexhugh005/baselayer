@@ -11,6 +11,7 @@ page, then use this folder to talk to the APIs.
 | --- | --- | --- |
 | Public dashboards | none | Live grid JSON used by [Grid and Market Conditions](https://www.ercot.com/gridmktinfo/dashboards) |
 | Public Data API | Azure B2C id token + APIM subscription key | EMIL reports at `https://api.ercot.com/api/public-reports` |
+| ESR API | Azure B2C id token + its own APIM subscription key | Energy storage four-second data at `https://api.ercot.com/api/public-data` |
 
 Dashboards are enough for live prices, reserves, supply/demand, and
 system-wide energy storage. The Public Data API is the catalog of official
@@ -22,9 +23,14 @@ those APIs from US addresses only.
 ## Register for the Public Data API
 
 1. Open [API Explorer](https://apiexplorer.ercot.com/) and sign up.
-2. Open **Products**, subscribe (for example "Public API"), then copy the
-   **Primary key** from your profile.
-3. Copy `.env.example` to `.env` and fill in email, password, and that key.
+2. Open **Products** and subscribe to "Public API". For energy storage
+   four-second data, also subscribe to "Energy Storage Resource (ESR) API".
+3. Copy `.env.example` to `.env` and fill in email, password, and each
+   subscription's **Primary key** from your profile:
+   `ERCOT_PUBLIC_API_SUBSCRIPTION_KEY` for `/api/public-reports` and
+   `ERCOT_ESR_API_SUBSCRIPTION_KEY` for `/api/public-data`. Each key only
+   works on its own API; the client picks the key from the request path.
+   `ERCOT_SUBSCRIPTION_KEY` is still read as the Public API key.
 
 Token requests go to Azure AD B2C (`B2C_1_PUBAPI-ROPC-FLOW`). The id token
 lasts one hour; this client requests a new one when it expires. Official
