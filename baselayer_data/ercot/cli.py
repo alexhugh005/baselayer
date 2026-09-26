@@ -45,7 +45,7 @@ def _parse_params(pairs):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        prog="python -m ercot",
+        prog="python -m baselayer_data.ercot",
         description="Connect to ERCOT Public Data API and public dashboards.",
     )
     sub = parser.add_subparsers(dest="command", required=True)

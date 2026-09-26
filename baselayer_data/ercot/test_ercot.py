@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from ercot.client import (
+from baselayer_data.ercot.client import (
     ErcotAuthError,
     ErcotConfigError,
     ErcotHttpError,
@@ -15,7 +15,7 @@ from ercot.client import (
     load_config,
     safe_filename,
 )
-from ercot.dashboards import DASHBOARDS, DashboardClient
+from baselayer_data.ercot.dashboards import DASHBOARDS, DashboardClient
 
 
 class FakeResponse:
@@ -97,7 +97,7 @@ class PublicApiTests(unittest.TestCase):
                 }
             )
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             token = self.api.fetch_token()
         self.assertEqual(token, "id-abc")
         self.assertIn("B2C_1_PUBAPI-ROPC-FLOW", captured["url"])
@@ -116,7 +116,7 @@ class PublicApiTests(unittest.TestCase):
                 {"error": "invalid_grant", "error_description": "bad password"},
             )
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             with self.assertRaises(ErcotAuthError) as ctx:
                 self.api.fetch_token()
         self.assertIn("bad password", str(ctx.exception))
@@ -130,7 +130,7 @@ class PublicApiTests(unittest.TestCase):
                 return FakeResponse({"id_token": "cached", "expires_in": "3600"})
             return FakeResponse({"ok": True})
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             self.api.products_page()
             self.api.products_page()
         self.assertEqual(calls["n"], 3)
@@ -146,7 +146,7 @@ class PublicApiTests(unittest.TestCase):
             captured["subscription"] = request.headers.get("Ocp-apim-subscription-key")
             return FakeResponse({"_embedded": {"products": [{"emilId": "NP3-233-CD"}]}})
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             page = self.api.products_page()
         self.assertEqual(captured["url"], "https://api.ercot.com/api/public-reports")
         self.assertEqual(captured["authorization"], "Bearer id-xyz")
@@ -168,7 +168,7 @@ class PublicApiTests(unittest.TestCase):
             captured[request.full_url] = request.headers.get("Ocp-apim-subscription-key")
             return FakeResponse({})
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             api.request("/api/public-data")
             api.request("/api/public-data/archive/rptesr-m")
             api.request("/api/public-reports")
@@ -208,7 +208,7 @@ class PublicApiTests(unittest.TestCase):
             urls.append(request.full_url)
             return FakeResponse({})
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             self.api.product("NP3-233-CD")
             self.api.artifact("NP3-233-CD", "hourly_res_outage_cap", size=1)
             self.api.archive("NP3-233-CD")
@@ -240,7 +240,7 @@ class PublicApiTests(unittest.TestCase):
                 return FakeResponse({"id_token": "t", "expires_in": "3600"})
             return FakeResponse(pages[request.full_url])
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             products = self.api.products()
         self.assertEqual([item["emilId"] for item in products], ["A", "B"])
 
@@ -254,7 +254,7 @@ class PublicApiTests(unittest.TestCase):
                 {"statusCode": 401, "message": "Access denied due to missing subscription key."},
             )
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             with self.assertRaises(ErcotHttpError) as ctx:
                 self.api.products_page()
         self.assertEqual(ctx.exception.status, 401)
@@ -275,7 +275,7 @@ class PublicApiTests(unittest.TestCase):
             )
 
         with TemporaryDirectory() as tmp:
-            with patch("ercot.client.urlopen", fake_urlopen):
+            with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
                 path = self.api.download_artifact("NP4-188-CD", "spp", tmp)
             self.assertEqual(path.name, "spp.csv")
             self.assertEqual(path.read_bytes(), b"a,b\n1,2\n")
@@ -326,7 +326,7 @@ class PublicApiTests(unittest.TestCase):
             return FakeResponse(pages[page])
 
         with TemporaryDirectory() as tmp:
-            with patch("ercot.client.urlopen", fake_urlopen):
+            with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
                 paths = self.api.download_archive("NP3-233-CD", tmp, pause_seconds=0)
                 again = self.api.download_archive("NP3-233-CD", tmp, pause_seconds=0)
             self.assertEqual([path.name for path in paths], ["one.zip", "two.zip"])
@@ -346,7 +346,7 @@ class DashboardTests(unittest.TestCase):
             return FakeResponse({"lastUpdated": "now", "data": []})
 
         client = DashboardClient()
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             client.prices()
             client.get("storage")
         self.assertEqual(
@@ -399,7 +399,7 @@ class DashboardTests(unittest.TestCase):
             name = request.full_url.rsplit("/", 1)[-1]
             return FakeResponse(feeds[name])
 
-        with patch("ercot.client.urlopen", fake_urlopen):
+        with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
             status = DashboardClient().grid_status()
         self.assertEqual(status["condition"]["state"], "normal")
         self.assertEqual(status["realTimeSpp"]["hbHubAvg"], 44.85)
@@ -411,7 +411,7 @@ class DashboardTests(unittest.TestCase):
             return FakeResponse({"lastUpdated": "now"})
 
         with TemporaryDirectory() as tmp:
-            with patch("ercot.client.urlopen", fake_urlopen):
+            with patch("baselayer_data.ercot.client.urlopen", fake_urlopen):
                 paths = DashboardClient().save_datasets(tmp)
             names = {path.name for path in paths}
             self.assertEqual(len(paths), len(DASHBOARDS) + 2)

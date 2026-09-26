@@ -165,7 +165,7 @@ backend/src/
   BaseLayer.Domain/      Home, device, command and authorization state
   BaseLayer.Data/        EF Core SQLite context and repository
 backend/tests/           Domain/service/provider regression tests
-ercot/                  ERCOT Public Data API and live dashboard access
+baselayer_data/         Data engineering: ERCOT pulls, datasets (.parq), ercot/ API client
 ```
 
 This follows the Done With School controller → service → repository style, with
@@ -204,6 +204,6 @@ keys; add operational monitoring, telemetry retention, and deployment-specific
 network controls. No purchases, hosting deployment, or paid subscriptions are part
 of this setup.
 
-ERCOT Public Data API and live dashboard access lives in [`ercot/`](ercot/). Run `python3 ercot/predict_outage.py` for the grid outage prediction.
+Data engineering lives in [`baselayer_data/`](baselayer_data/), including ERCOT Public Data API and live dashboard access in [`baselayer_data/ercot/`](baselayer_data/ercot/). Run `python3 baselayer_data/ercot/predict_outage.py` for the grid outage prediction.
 
 Automatic EV reductions also save the original current limit in the restore queue. After 5 seconds of stable spare capacity, the queue raises the amps as far as the available capacity permits, with a 500 W buffer and fresh confirmation before each further increase. Partial restores keep their queue priority until the original limit is reached. Manual current changes cancel that compensation target. See [EV charging](docs/ev-charging.md).

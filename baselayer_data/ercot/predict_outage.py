@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def forecast_arguments(root: Path, extra: list[str] | None = None) -> list[str]:
@@ -37,7 +37,7 @@ def forecast_arguments(root: Path, extra: list[str] | None = None) -> list[str]:
 def run(extra: list[str] | None = None) -> int:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
-    from ercot.cli import main
+    from baselayer_data.ercot.cli import main
 
     print(
         "Running the 60-minute outage-rate forecast. "

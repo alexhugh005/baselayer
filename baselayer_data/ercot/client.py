@@ -65,7 +65,7 @@ def load_config(env_file=None):
     """Load credentials from a .env file and process environment.
 
     Search order for the file: `env_file`, `$ERCOT_ENV_FILE`, `./.env`,
-    `ercot/.env` next to this package.
+    `baselayer_data/ercot/.env` next to this package.
     """
     candidates = []
     if env_file:
@@ -242,7 +242,7 @@ class PublicApi:
         ]
         if missing:
             raise ErcotConfigError(
-                "missing " + ", ".join(missing) + "; see ercot/.env.example"
+                "missing " + ", ".join(missing) + "; see baselayer_data/ercot/.env.example"
             )
 
     def fetch_token(self):
@@ -297,7 +297,7 @@ class PublicApi:
         else:
             key, name = self.subscription_key, "ERCOT_PUBLIC_API_SUBSCRIPTION_KEY"
         if not key:
-            raise ErcotConfigError(f"missing {name}; see ercot/.env.example")
+            raise ErcotConfigError(f"missing {name}; see baselayer_data/ercot/.env.example")
         return key
 
     def _auth_headers(self, url, extra=None):
