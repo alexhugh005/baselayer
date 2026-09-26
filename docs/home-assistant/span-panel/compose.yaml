@@ -1,0 +1,27 @@
+name: basehack-span-panel
+services:
+  panelbench:
+    image: basehack-panelbench:2.5.3
+    container_name: basehack-panelbench
+    hostname: basehack-panelbench
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "/lab/entrypoint.sh"]
+    ports:
+      - "127.0.0.1:18080:18080"
+      - "127.0.0.1:18081:18081"
+    environment:
+      ADVERTISE_ADDRESS: basehack-panelbench
+      HA_URL: http://basehack-homeassistant:8123
+    volumes:
+      - ./:/lab:ro
+      - ../../../.local/span-panel/configs:/app/configs
+      - ../../../.local/span-panel/secrets/ha-token:/run/secrets/ha-token:ro
+      - panel-certs:/app/certs
+    networks:
+      lab: {}
+networks:
+  lab:
+    external: true
+    name: basehack-energy-lab_default
+volumes:
+  panel-certs:

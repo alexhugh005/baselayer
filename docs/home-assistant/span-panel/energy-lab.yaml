@@ -1,0 +1,176 @@
+panel_config:
+  serial_number: energy-lab
+  total_tabs: 16
+  main_size: 200
+  latitude: 30.2672
+  longitude: -97.7431
+  wifi_ssid: Virtual Energy Lab
+circuit_templates:
+  living_room:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 1800
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_living_room_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 15
+  office:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 2400
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_office_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 20
+  kitchen:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 2400
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_kitchen_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 20
+  essentials:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 1800
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_essentials_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 15
+  laundry:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 7200
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_laundry_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 30
+  garage:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 14400
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_garage_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 60
+  hvac:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 7200
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_hvac_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 30
+  water_heater:
+    energy_profile:
+      mode: consumer
+      power_range:
+      - 0
+      - 7200
+      typical_power: 0
+      power_variation: 0
+    recorder_entity: sensor.lab_span_water_heater_power
+    relay_behavior: controllable
+    priority: OFF_GRID
+    breaker_rating: 30
+circuits:
+- id: living_room
+  name: Living Room
+  template: living_room
+  tabs:
+  - 1
+- id: office
+  name: Office Outlets
+  template: office
+  tabs:
+  - 2
+- id: kitchen
+  name: Kitchen Outlets
+  template: kitchen
+  tabs:
+  - 3
+- id: essentials
+  name: Essential Electronics
+  template: essentials
+  tabs:
+  - 4
+- id: laundry
+  name: Laundry Dryer
+  template: laundry
+  tabs:
+  - 5
+  - 7
+- id: garage
+  name: Garage EV Charger
+  template: garage
+  tabs:
+  - 6
+  - 8
+- id: hvac
+  name: Central HVAC
+  template: hvac
+  tabs:
+  - 9
+  - 11
+- id: water_heater
+  name: Water Heater
+  template: water_heater
+  tabs:
+  - 10
+  - 12
+unmapped_tabs:
+- 13
+- 14
+- 15
+- 16
+simulation_params:
+  update_interval: 1
+  time_acceleration: 1
+  noise_factor: 0
+  enable_realistic_behaviors: false
+bess:
+  enabled: true
+  vendor: Span
+  product_name: Energy Lab simulated battery
+  serial_number: SIM-ENERGY-LAB-BESS
+  firmware_version: sim-bess/v0.1.0
+  mid_product_name: Energy Lab simulated MID
+  mid_firmware_version: sim-mid/v0.1.0
+  mid_hardware_version: virtual
+  nameplate_capacity_kwh: 13.5
+  initial_soe_kwh: 10.8
+  max_charge_w: 3500.0
+  max_discharge_w: 11000.0
+  charge_efficiency: 0.95
+  discharge_efficiency: 0.95
+  backup_reserve_pct: 0.0
+  charge_mode: backup-only

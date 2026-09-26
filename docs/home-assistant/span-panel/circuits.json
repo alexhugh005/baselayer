@@ -1,0 +1,152 @@
+{
+  "living_room": {
+    "name": "Living Room",
+    "tabs": [
+      1
+    ],
+    "amps": 15,
+    "area": "Living Room",
+    "devices": [
+      "light.virtual_living_room_light",
+      "fan.virtual_ceiling_fan"
+    ],
+    "helpers": [
+      "lab_light_on",
+      "lab_fan_on"
+    ],
+    "meters": [
+      "living_room_light",
+      "ceiling_fan"
+    ]
+  },
+  "office": {
+    "name": "Office Outlets",
+    "tabs": [
+      2
+    ],
+    "amps": 20,
+    "area": "Office",
+    "devices": [
+      "switch.virtual_heater",
+      "switch.virtual_desk_lamp"
+    ],
+    "helpers": [
+      "heater_enabled",
+      "lamp_enabled",
+      "lab_heater_demand"
+    ],
+    "meters": [
+      "heater",
+      "desk_lamp"
+    ]
+  },
+  "kitchen": {
+    "name": "Kitchen Outlets",
+    "tabs": [
+      3
+    ],
+    "amps": 20,
+    "area": "Kitchen",
+    "devices": [
+      "switch.virtual_refrigerator",
+      "switch.virtual_toaster",
+      "switch.virtual_dishwasher"
+    ],
+    "helpers": [
+      "lab_refrigerator_enabled",
+      "lab_toaster_enabled",
+      "lab_dishwasher_enabled"
+    ],
+    "meters": [
+      "refrigerator",
+      "toaster",
+      "dishwasher"
+    ]
+  },
+  "essentials": {
+    "name": "Essential Electronics",
+    "tabs": [
+      4
+    ],
+    "amps": 15,
+    "area": "Utility",
+    "devices": [],
+    "helpers": [],
+    "meters": [
+      "electronics"
+    ]
+  },
+  "laundry": {
+    "name": "Laundry Dryer",
+    "tabs": [
+      5,
+      7
+    ],
+    "amps": 30,
+    "area": "Laundry",
+    "devices": [
+      "switch.virtual_dryer"
+    ],
+    "helpers": [
+      "dryer_enabled"
+    ],
+    "meters": [
+      "dryer"
+    ]
+  },
+  "garage": {
+    "name": "Garage EV Charger",
+    "tabs": [
+      6,
+      8
+    ],
+    "amps": 60,
+    "area": "Garage",
+    "devices": [
+      "switch.virtual_ev_charger"
+    ],
+    "helpers": [
+      "virtual_ev_charging_enabled"
+    ],
+    "meters": [
+      "ev_charger"
+    ]
+  },
+  "hvac": {
+    "name": "Central HVAC",
+    "tabs": [
+      9,
+      11
+    ],
+    "amps": 30,
+    "area": "Utility",
+    "devices": [
+      "climate.virtual_room_thermostat"
+    ],
+    "helpers": [
+      "lab_hvac_on"
+    ],
+    "meters": [
+      "hvac"
+    ]
+  },
+  "water_heater": {
+    "name": "Water Heater",
+    "tabs": [
+      10,
+      12
+    ],
+    "amps": 30,
+    "area": "Utility",
+    "devices": [
+      "switch.virtual_water_heater"
+    ],
+    "helpers": [
+      "lab_water_heater_enabled",
+      "lab_water_heater_demand"
+    ],
+    "meters": [
+      "water_heater"
+    ]
+  }
+}

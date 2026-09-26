@@ -1,0 +1,10 @@
+{
+  "living_room": "switch.span_panel_living_room_breaker",
+  "office": "switch.span_panel_office_outlets_breaker",
+  "kitchen": "switch.span_panel_kitchen_outlets_breaker",
+  "essentials": "switch.span_panel_essential_electronics_breaker",
+  "laundry": "switch.span_panel_laundry_dryer_breaker",
+  "garage": "switch.span_panel_garage_ev_charger_breaker",
+  "hvac": "switch.span_panel_central_hvac_breaker",
+  "water_heater": "switch.span_panel_water_heater_breaker"
+}
