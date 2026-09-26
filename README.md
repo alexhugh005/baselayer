@@ -42,6 +42,20 @@ public signing keys, issuer, expiry and authorized origin.
 [Historical fixture notes](docs/local-ha.md) document the virtual house used for
 local verification before the plugin folder was removed.
 
+Usage alerts appear for every connected home at or above its configured limit
+(currently 11 kW), including homes not selected in the dashboard. Failed refreshes,
+offline homes, and unknown readings do not trigger alerts. Open **Settings** in the sidebar and turn **Browser notifications** on to opt in.
+The preference is saved per account in this browser. Permission is requested
+only when you turn the toggle on. Each home sends one notification per high-usage event;
+a valid reading below the limit rearms it. Turning notifications off keeps in-site
+alerts active.
+
+Browser notifications require a supported browser and HTTPS (or localhost).
+They rely on page polling: the page must remain open, and background tabs may
+be delayed. Delivery with the site closed is not implemented; that requires a
+service worker, authenticated push-subscription storage, and backend Web Push
+sending from the usage polling service.
+
 A power reading of **unknown** is not zero. Devices without meters can still be
 controlled if permitted, but are not ranked in power-saving recommendations.
 

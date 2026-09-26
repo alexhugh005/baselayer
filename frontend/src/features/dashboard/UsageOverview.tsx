@@ -1,8 +1,16 @@
 import { isDeviceRunning } from "../../lib/deviceState";
-import { Activity, ArrowDownRight, PlugZap } from "lucide-react";
+import { Activity, PlugZap } from "lucide-react";
 import type { Home } from "../../lib/types";
 import { formatPower } from "./power";
+import { LoadingStatus } from "../../components/ui/LoadingStatus";
 export function UsageOverview({ home }: { home: Home }) {
+  const waitingForUsage =
+    home.connected &&
+    !home.revoked &&
+    home.householdWatts === null &&
+    (home.powerSource === "deviceSum"
+      ? home.devices.some((device) => device.powerSensorId)
+      : !!home.householdPowerSensorId);
   const usage = home.householdWatts,
     percent =
       usage === null ? 0 : Math.min(100, (usage / home.limitWatts) * 100);
@@ -16,7 +24,15 @@ export function UsageOverview({ home }: { home: Home }) {
             : "HOUSEHOLD USAGE"}
         </div>
         <div className="usage-value">
-          {usage === null ? "—" : (usage / 1000).toFixed(2)} <span>kW</span>
+          {waitingForUsage ? (
+            <LoadingStatus>Loading usage…</LoadingStatus>
+          ) : usage === null ? (
+            <span>Usage unavailable</span>
+          ) : (
+            <>
+              {(usage / 1000).toFixed(2)} <span>kW</span>
+            </>
+          )}
         </div>
         <div
           className="meter"
@@ -61,16 +77,6 @@ export function UsageOverview({ home }: { home: Home }) {
           <small> / {home.devices.length}</small>
         </strong>
         <p>{home.devices.filter((d) => d.allowed).length} controllable</p>
-      </div>
-      <div className="card metric-card">
-        <span className="metric-icon mint">
-          <ArrowDownRight size={23} />
-        </span>
-        <span className="eyebrow">AFTER SUGGESTED SHUTOFFS</span>
-        <strong className="projected">
-          {formatPower(home.projectedWatts)}
-        </strong>
-        <p>Estimated usage</p>
       </div>
     </section>
   );

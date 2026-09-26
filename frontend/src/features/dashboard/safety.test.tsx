@@ -7,6 +7,7 @@ import {
   render,
   renderHook,
   screen,
+  within,
 } from "@testing-library/react";
 import type { Api } from "../../lib/api";
 import type { Home } from "../../lib/types";
@@ -14,6 +15,8 @@ import { useShutoffApproval } from "../commands/useShutoffApproval";
 import { DeviceSettings } from "../devices/DeviceSettings";
 import { useHomes } from "./useHomes";
 import { UsageOverview } from "./UsageOverview";
+import { Dashboard } from "./Dashboard";
+import { ProjectedUsage } from "./ProjectedUsage";
 
 function home(): Home {
   return {
@@ -65,6 +68,145 @@ afterEach(() => {
 });
 
 describe("shutoff approval safety", () => {
+  it("shows re-sync progress after submitting recommendations until fresh data arrives", async () => {
+    const current = home();
+    const sync = deferred<Home[]>();
+    const api = {
+      homes: vi
+        .fn()
+        .mockResolvedValueOnce([current])
+        .mockReturnValue(sync.promise),
+      turnOff: vi.fn().mockResolvedValue([]),
+    } as unknown as Api;
+    render(<Dashboard api={api} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Device Recommendations" }),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Turn Off" })),
+    );
+    const modal = within(
+      screen.getByRole("dialog", { name: "Device Recommendations" }),
+    );
+    expect(modal.getByRole("status").textContent).toContain(
+      "Re-syncing devices and checking usage",
+    );
+    expect(
+      (modal.getByRole("button", { name: "Re-syncing…" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await act(async () => sync.resolve([{ ...current, householdWatts: 3000 }]));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      screen.queryByText("Re-syncing devices and checking usage…"),
+    ).toBeNull();
+  });
+
+  it.each(["Confirmed", "Failed", "Expired", "Cancelled"])(
+    "keeps sync progress visible for queued commands and clears it when %s",
+    async (status) => {
+      vi.useFakeTimers();
+      const current = home();
+      current.commands = [
+        {
+          id: "command-1",
+          entityId: "switch.dryer",
+          status: "Pending",
+          attempts: 0,
+          createdUtc: new Date().toISOString(),
+          message: null,
+        },
+      ];
+      const homes = vi.fn().mockResolvedValue([current]);
+      render(<Dashboard api={{ homes } as unknown as Api} />);
+      await act(async () => {});
+      expect(
+        screen.getByText("Re-syncing devices and checking usage…"),
+      ).toBeTruthy();
+      homes.mockResolvedValue([
+        { ...current, commands: [{ ...current.commands[0], status }] },
+      ]);
+      await act(async () => vi.advanceTimersByTimeAsync(3000));
+      expect(
+        screen.queryByText("Re-syncing devices and checking usage…"),
+      ).toBeNull();
+    },
+  );
+
+  it("updates projected usage and turns green only below the limit", () => {
+    const current = home();
+    const { rerender } = render(<ProjectedUsage home={current} devices={[]} />);
+    const meter = screen.getByRole("meter", { name: "Projected Usage" });
+    expect(meter.getAttribute("aria-valuetext")).toContain("13.00 kW");
+    expect(meter.parentElement?.className).toContain("above");
+    rerender(
+      <ProjectedUsage
+        home={current}
+        devices={[{ ...current.devices[0], powerWatts: 2000 }]}
+      />,
+    );
+    expect(meter.parentElement?.className).toContain("above");
+    rerender(<ProjectedUsage home={current} devices={[current.devices[0]]} />);
+    expect(meter.getAttribute("aria-valuenow")).toBe("8000");
+    expect(meter.parentElement?.className).toContain("below");
+    rerender(
+      <ProjectedUsage
+        home={current}
+        devices={[{ ...current.devices[0], powerWatts: null }]}
+      />,
+    );
+    expect(screen.queryByRole("meter")).toBeNull();
+    expect(screen.getByText(/Projection unavailable/)).toBeTruthy();
+  });
+
+  it("opens recommended devices preselected and turns off only the checked devices", async () => {
+    const current = home();
+    current.devices.push({
+      ...current.devices[0],
+      entityId: "switch.other",
+      name: "Other",
+      recommended: false,
+    });
+    const turnOff = vi.fn().mockResolvedValue([]);
+    const api = {
+      homes: vi.fn().mockResolvedValue([current]),
+      turnOff,
+    } as unknown as Api;
+    render(<Dashboard api={api} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Device Recommendations" }),
+    );
+    const modal = within(
+      screen.getByRole("dialog", { name: "Device Recommendations" }),
+    );
+    expect(modal.getAllByRole("checkbox")).toHaveLength(2);
+    expect(
+      (
+        modal.getByRole("checkbox", {
+          name: "Select dryer",
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    expect(
+      (
+        modal.getByRole("checkbox", {
+          name: "Select heater",
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    expect(turnOff).not.toHaveBeenCalled();
+    fireEvent.click(modal.getByRole("checkbox", { name: "Select heater" }));
+    await act(async () =>
+      fireEvent.click(modal.getByRole("button", { name: "Turn Off" })),
+    );
+    expect(turnOff).toHaveBeenCalledWith(
+      "home-1",
+      ["switch.dryer"],
+      expect.any(String),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("retains the same immutable operation across ambiguous network failures", async () => {
     const turnOff = vi
       .fn()

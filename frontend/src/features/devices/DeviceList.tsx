@@ -3,16 +3,19 @@ import { Lamp, Wind, Power, Lock, Check, Flame, Plug } from "lucide-react";
 import type { Device } from "../../lib/types";
 import { formatPower } from "../dashboard/power";
 import { Badge } from "../../components/ui/Badge";
+import { LoadingStatus } from "../../components/ui/LoadingStatus";
 export function DeviceList({
   devices,
   selected,
   onToggle,
   disabled,
+  loading = false,
 }: {
   devices: Device[];
   selected: string[];
   onToggle: (id: string) => void;
   disabled: boolean;
+  loading?: boolean;
 }) {
   return (
     <div className="device-list">
@@ -24,7 +27,11 @@ export function DeviceList({
             : d.entityId.includes("heater")
               ? Flame
               : Plug;
-        const enabled = d.allowed && isDeviceRunning(d.state) && !disabled;
+        const enabled =
+          d.allowed &&
+          !d.entityId.startsWith("climate.") &&
+          isDeviceRunning(d.state) &&
+          !disabled;
         return (
           <label
             className={`device-row ${selected.includes(d.entityId) ? "selected" : ""}`}
@@ -49,13 +56,24 @@ export function DeviceList({
                     ? "Off"
                     : "Unavailable"}
                 {!d.allowed ? " · View only" : ""}
+                {d.entityId.startsWith("climate.")
+                  ? " · Temperature control only"
+                  : ""}
               </small>
             </span>
             <span className="device-tag">
               {d.recommended && <Badge tone="amber">Suggested</Badge>}
             </span>
             <strong className="device-power">
-              {formatPower(d.powerWatts)}
+              {d.powerWatts === null &&
+              d.powerSensorId &&
+              !disabled &&
+              d.state !== "unavailable" &&
+              d.state !== "unknown" ? (
+                <LoadingStatus>Loading…</LoadingStatus>
+              ) : (
+                formatPower(d.powerWatts)
+              )}
             </strong>
             <span
               className="access-icon"
@@ -68,7 +86,13 @@ export function DeviceList({
       })}
       {devices.length === 0 && (
         <p className="empty">
-          <Power /> No devices found.
+          {loading ? (
+            <LoadingStatus>Loading devices…</LoadingStatus>
+          ) : (
+            <>
+              <Power /> No devices found.
+            </>
+          )}
         </p>
       )}
     </div>

@@ -8,7 +8,7 @@ import { AppShell } from "./AppShell";
 import { DevelopmentWorkspace } from "./DevelopmentWorkspace";
 
 function ClerkApp() {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const api = useMemo(() => createApi(() => getToken()), [getToken]);
   return (
     <AppShell
@@ -25,7 +25,7 @@ function ClerkApp() {
         window.location.pathname === "/oauth/home-assistant" ? (
           <OAuthCallback api={api} />
         ) : (
-          <Dashboard api={api} />
+          <Dashboard key={userId} api={api} userId={userId ?? undefined} />
         )
       ) : (
         <div className="signin">

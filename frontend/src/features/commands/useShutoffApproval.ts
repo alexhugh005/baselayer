@@ -18,6 +18,7 @@ export function useShutoffApproval(
   const [selected, setSelected] = useState<string[]>([]);
   const [approval, setApproval] = useState<Approval | null>(null);
   const [busy, setBusy] = useState(false);
+  const [syncingHomeId, setSyncingHomeId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const submitting = useRef(false);
   const eligible =
@@ -58,11 +59,11 @@ export function useShutoffApproval(
       idempotencyKey: crypto.randomUUID(),
     });
   }
-  async function send() {
+  async function send(operation = approval) {
     if (
-      !approval ||
+      !operation ||
       submitting.current ||
-      approval.devices.some((d) => !eligible.includes(d.entityId))
+      operation.devices.some((d) => !eligible.includes(d.entityId))
     )
       return;
     submitting.current = true;
@@ -71,19 +72,33 @@ export function useShutoffApproval(
     try {
       // Keep this exact key and payload on ambiguous network failures.
       await api.turnOff(
-        approval.homeId,
-        approval.devices.map((d) => d.entityId),
-        approval.idempotencyKey,
+        operation.homeId,
+        operation.devices.map((d) => d.entityId),
+        operation.idempotencyKey,
       );
       setApproval(null);
       setSelected([]);
+      setSyncingHomeId(operation.homeId);
       await refresh();
+      return true;
     } catch (e) {
       setError((e as Error).message);
     } finally {
       submitting.current = false;
       setBusy(false);
+      setSyncingHomeId(null);
     }
+  }
+  async function sendSelected() {
+    if (!home || !selectedDevices.length || submitting.current) return;
+    const operation = approval ?? {
+      homeId: home.id,
+      homeName: home.name,
+      devices: selectedDevices.map((d) => ({ ...d })),
+      idempotencyKey: crypto.randomUUID(),
+    };
+    setApproval(operation);
+    return await send(operation);
   }
   return {
     selected,
@@ -91,9 +106,13 @@ export function useShutoffApproval(
     selectedDevices,
     approval,
     busy,
+    syncingHomeId,
     error,
     review,
-    send,
+    send: async () => {
+      await send();
+    },
+    sendSelected,
     close: () => {
       if (!submitting.current) setApproval(null);
     },
