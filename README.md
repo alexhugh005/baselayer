@@ -131,4 +131,4 @@ keys; add operational monitoring, telemetry retention, and deployment-specific
 network controls. No purchases, hosting deployment, or paid subscriptions are part
 of this setup.
 
-ERCOT Public Data API and live dashboard access lives in [`ercot/`](ercot/).
+ERCOT Public Data API and live dashboard access lives in [`ercot/`](ercot/). Run `python3 ercot/predict_outage.py` for the grid outage prediction.

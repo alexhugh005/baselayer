@@ -40,7 +40,13 @@ python3 -m ercot dashboard prices
 python3 -m ercot dashboard storage
 python3 -m ercot datasets
 python3 -m ercot daily-usage
+python3 ercot/predict_outage.py
+python3 -m ercot outage-forecast --minutes 60
 ```
+
+Running `python3 ercot/predict_outage.py` from the repository root writes the grid outage prediction. Pressing Run on `ercot/predict_outage.py` does the same thing. The file saves the next 60 minutes to `dataset/ercot/outage-forecast-minutes.csv`. Extra arguments are passed through, including `--no-model`.
+
+`outage-forecast` retrieves historical real-time price and weather regimes that resemble the latest interval, then writes one row per future minute. `outage_likelihood` is the chance that ERCOT generation outage is at or above the historical 90th percentile of realized NP3-233-CD hourly totals. With `XAI_API_KEY` set, Grok 4.7 (`grok-4.7`) scores that chance from the retrieved episodes. Without a key, or with `--no-model`, the value is the distance-weighted share of those episodes that were elevated at the same lead. `retrieval_likelihood` always keeps that share. Each minute is also annotated with linked hazards: heavy rain, storm, tornado, hurricane or tropical storm, construction, and other disaster reports. Hourly city weather is cached from Open-Meteo and Texas storm reports from NOAA under `dataset/ercot/weather/`. Optional construction or local disaster rows can be added as `dataset/ercot/weather/local-events.csv` with columns `start,end,event_type,region,summary`. The megawatt path is the hourly generation total, repeated across the minutes of that hour.
 
 `datasets` writes each live feed to `dataset/dashboards/`, a compact snapshot to `dataset/grid-status.json`, and an actual-demand summary to `dataset/daily-usage.json`. The summary excludes forecast intervals and reports partial-day coverage. That folder is gitignored.
 
@@ -78,7 +84,7 @@ rows = api.artifact("NP4-188-CD", "spp")
 ## Tests
 
 ```sh
-python3 -m unittest ercot.test_ercot
+python3 -m unittest ercot.test_ercot ercot.test_outage_rag
 ```
 
 Set `ERCOT_LIVE=1` to also hit live dashboard endpoints. Public Data API
