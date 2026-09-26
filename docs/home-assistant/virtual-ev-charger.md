@@ -1,5 +1,11 @@
 # Virtual EV charger
 
+**Updated 2026-09-26:** The running lab now uses the
+[realistic household package](realistic-lab/README.md), including battery charge,
+charging efficiency, taper, target completion and 3 W EVSE standby. Use that
+complete package for current behavior. The original standalone package and notes
+below are retained as the earlier simple fixed-current example.
+
 Installed in the local Johnson Household Home Assistant lab on 2026-09-25.
 Open http://localhost:8123/energy-lab/devices and use the **Virtual EV Charger** card.
 
@@ -15,6 +21,10 @@ The switch represents permission to charge; it can remain enabled while the vehi
 The local household meter includes charger power; demo reset and overload scripts pause the charger to keep their existing scenarios deterministic. Both local dashboards include the charger card. Configuration backups use `.before-ev` suffixes.
 
 ## Base Layer mapping
+
+For manual current control and automatic reduction below the 11 kW limit, see
+[EV charging setup](../ev-charging.md). Pair the current-limit entity as well as
+the power sensor, then enable Smart Shutoff and set the EV to Anytime.
 
 In Device settings, map **Virtual EV Charger** (`switch.virtual_ev_charger`) to **Virtual EV Charger Power** (`sensor.virtual_ev_charger_power`). Permit control if you want it included in approved shutoffs. Whole-house mode already includes the load in the local household meter. Device-sum mode requires the power mapping. The existing provider supports native switch controls and power sensors, so no application code changes are needed.
 

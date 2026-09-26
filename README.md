@@ -32,12 +32,55 @@ public signing keys, issuer, expiry and authorized origin.
 3. Authorize in Home Assistant. The browser returns to Base Layer.
 4. In **Device settings**, choose **Whole-house meter** or **Sum of device readings**. Similar device/sensor names are suggested for review;
    existing assignments are preserved and ambiguous matches stay unselected.
-   Select device power sensors and devices allowed to be controlled. **Allow all current devices** and
-   **Allow future devices** are independent choices.
-5. At 11 kW or above, review suggested devices, then choose **Review shutoff**
-   and **Approve & turn off**. No command is generated merely by exceeding the
-   limit. Command activity distinguishes pending, verifying, retrying, confirmed,
-   failed and expired results.
+   Select device power sensors and a shutoff level for each device:
+   **Never** blocks all shutoffs, **Sometimes** requires your approval,
+   and **Anytime** permits automatic shutoffs when Smart Shutoff is enabled.
+   New devices default to Never; optionally default future devices to Sometimes.
+5. In **Device settings**, enable **Smart Shutoff and automatic restore** for each home you want managed.
+   At or above the 11 kW limit, the server selects the fewest measured Anytime
+   devices needed to get strictly below the limit, largest loads first. If those
+   loads cannot cover the reduction, it selects all eligible Anytime devices.
+6. After command confirmation and a fresh usage reading, any remaining overload
+   produces recommendations for the fewest Sometimes devices. Approve them with
+   **Device Recommendations → Turn Off**. If they cannot save enough power,
+   the app tells you to turn off additional appliances yourself to help the battery
+   return to a working state. This is usage guidance, not battery-state telemetry.
+
+Smart Shutoff starts disabled, and existing control permissions become Sometimes
+(or Never when control was disabled). Devices without a valid positive power reading
+and thermostats are excluded from automatic shutoffs and recommendations. Thermostats
+retain their temperature settings. With Smart Shutoff disabled, measured permitted
+devices remain available for manual recommendations.
+
+Automatic commands appear in **Recent activity**, use the existing bounded retry and
+confirmation flow, and are not recreated for the same device during an uninterrupted
+high-usage event. A valid below-limit reading starts a new event next time usage rises.
+Disabling Smart Shutoff or changing a device away from Anytime stops future automatic
+attempts; it cannot undo a command already sent. The server must remain running and
+connected to Home Assistant for automatic control.
+
+Confirmed Base Layer shutoffs enter the **Restore queue**, including approved
+Sometimes devices. The queue persists across server restarts and records each
+load's measured watts immediately before its first shutoff attempt. Devices already
+off are not added. Estimates without a valid positive reading are shown as unknown
+and cannot restore automatically. Old commands without saved estimates are not
+retroactively queued.
+
+With Smart Shutoff enabled, restoration chooses the oldest eligible queued device
+that fits, allowing smaller loads to return while a larger one waits. It requires
+at least 15 seconds off, 5 seconds of fresh readings with sufficient spare
+capacity, and at least 5 seconds between restorations. These shortened delays are
+**for the demo only**, not production restart settings. The estimate plus a buffer
+of the greater of 500 W or 10% of the estimate must fit strictly below the limit.
+Only one restore command is active at a time; the next device waits for confirmation
+and another stable interval. Unknown readings, failed polls, and gaps over 20 seconds
+restart the stability window. Lost capacity pauses retries; failed/expired restores
+stay visible without being requeued indefinitely. **Keep off** removes the entry and
+cancels future restore attempts. Disabling Smart Shutoff pauses the queue; setting a
+device to Never removes it. A device turned on outside Base Layer leaves the queue.
+The UI distinguishes restore commands from shutoffs. These decisions use measured
+power, not battery charge percentage or a guarantee about appliance startup surge.
+
 
 [Historical fixture notes](docs/local-ha.md) document the virtual house used for
 local verification before the plugin folder was removed.
@@ -45,6 +88,9 @@ local verification before the plugin folder was removed.
 Usage alerts appear for every connected home at or above its configured limit
 (currently 11 kW), including homes not selected in the dashboard. Failed refreshes,
 offline homes, and unknown readings do not trigger alerts. Open **Settings** in the sidebar and turn **Browser notifications** on to opt in.
+Confirmed Smart Shutoff shutoffs also send a notification when enabled, including
+a reminder if more reduction is needed. Recent confirmations are deduplicated across
+page navigation; old activity is not replayed as notifications.
 The preference is saved per account in this browser. Permission is requested
 only when you turn the toggle on. Each home sends one notification per high-usage event;
 a valid reading below the limit rearms it. Turning notifications off keeps in-site
@@ -75,7 +121,24 @@ A hosted API needs network access to the user's HA instance (e.g. an appropriate
 HTTPS address). A user's private `localhost` URL cannot be reached from a cloud
 server.
 
+## Device usage history
+
+The backend now records [device usage history](docs/usage-history.md) from Home
+Assistant polling: minute summaries for 90 days, hourly summaries for two years,
+and observed device state changes. Authenticated history endpoints return power,
+estimated energy, and coverage so missing readings remain visible. Recording runs
+while the API is running, independently of browser activity and shutoff permissions.
+
 ## Code structure
+
+**[Smart Usage](docs/smart-usage.md)** is available from the sidebar lightbulb.
+Preview battery runtime and the fewest shutoffs needed to extend it, then confirm
+device switches. Turn-ons are checked against the 11 kW battery limit and fresh
+power readings; a confirmed plan keeps its off devices out of automatic restore.
+
+The [battery telemetry API](docs/battery-api.md) exposes each home's current charge
+and capacity through a replaceable provider. It currently uses a configurable,
+time-based simulation while the external Core API is unavailable.
 
 ```text
 frontend/src/
@@ -132,3 +195,5 @@ network controls. No purchases, hosting deployment, or paid subscriptions are pa
 of this setup.
 
 ERCOT Public Data API and live dashboard access lives in [`ercot/`](ercot/). Run `python3 ercot/predict_outage.py` for the grid outage prediction.
+
+Automatic EV reductions also save the original current limit in the restore queue. After 5 seconds of stable spare capacity, the queue raises the amps as far as the available capacity permits, with a 500 W buffer and fresh confirmation before each further increase. Partial restores keep their queue priority until the original limit is reached. Manual current changes cancel that compensation target. See [EV charging](docs/ev-charging.md).

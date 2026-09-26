@@ -1,5 +1,8 @@
 # Historical Home Assistant fixture
 
+The running local lab now uses the [realistic household models](home-assistant/realistic-lab/README.md).
+The ratings and overload instructions below describe the older fixture.
+
 These notes describe the virtual house used during local verification. The former
 `smart-home-plugins` folder, including its fixture and archived integrations, has
 been removed from the repository. The commands below apply only to a separately
