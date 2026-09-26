@@ -8,6 +8,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<OAuthState> OAuthStates => Set<OAuthState>();
     protected override void OnModelCreating(ModelBuilder b)
     {
+        UsageModelConfiguration.Configure(b);
         b.Entity<Home>().Property(x => x.Id).ValueGeneratedNever();
         b.Entity<Home>().Property(x => x.PowerSource).HasDefaultValue(HouseholdPowerSources.WholeHouseMeter);
         b.Entity<Device>().Property(x => x.Id).ValueGeneratedNever();

@@ -103,6 +103,7 @@ public static class DatabaseInitializer
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN EstimatedWatts REAL NULL");
         if (!commandColumns.Contains("Automatic"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN Automatic INTEGER NOT NULL DEFAULT 0");
+        await UsageSchema.InitializeAsync(db);
         await transaction.CommitAsync();
     }
 }

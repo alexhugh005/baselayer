@@ -57,6 +57,10 @@ builder.Services.AddDbContext<PlatformDbContext>(o => o.UseSqlite(connection));
 builder.Services.AddSingleton<HomeOperationGate>();
 builder.Services.AddSingleton<DatabaseGate>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<UsageRecordingSession>();
+builder.Services.AddScoped<IUsageHistoryRepository, UsageHistoryRepository>();
+builder.Services.AddScoped<UsageHistoryService>();
+builder.Services.AddScoped<UsageHistoryMaintenance>();
 builder.Services.AddBatteryServices(builder.Configuration);
 builder.Services.AddScoped<ISmartPowerUsageService, SmartPowerUsageService>();
 builder.Services.AddScoped<IPlatformRepository, PlatformRepository>();
@@ -66,6 +70,7 @@ builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("
 builder.Services.AddSingleton<ICredentialProtector, CredentialProtector>();
 builder.Services.AddHttpClient<ISmartHomeProvider, HomeAssistantProvider>(client => client.Timeout = TimeSpan.FromSeconds(10)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHostedService<HomePollingWorker>();
+builder.Services.AddHostedService<UsageHistoryMaintenanceWorker>();
 var app = builder.Build();
 using (var scope = app.Services.CreateScope()) await DatabaseInitializer.InitializeAsync(scope.ServiceProvider.GetRequiredService<PlatformDbContext>());
 app.UseMiddleware<ExceptionMiddleware>();
