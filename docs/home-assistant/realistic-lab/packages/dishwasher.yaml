@@ -1,0 +1,116 @@
+input_boolean:
+  lab_dishwasher_enabled:
+    name: Dishwasher run/pause
+    initial: false
+input_number:
+  lab_dishwasher_elapsed:
+    name: Dishwasher elapsed run time
+    min: 0
+    max: 5400
+    step: 0.01
+    unit_of_measurement: s
+    mode: box
+template:
+- switch:
+  - name: Virtual Dishwasher
+    unique_id: lab_dishwasher_switch
+    icon: mdi:dishwasher
+    state: '{% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      %}false{% else %}{{ is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      and is_state(''input_boolean.lab_dishwasher_enabled'', ''on'') }}{% endif %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+        }}'
+    - if:
+      - condition: template
+        value_template: '{{ states(''input_number.lab_dishwasher_elapsed'') | float(0)
+          >= 5400 }}'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.lab_dishwasher_elapsed
+        data:
+          value: 0
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_dishwasher_enabled
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lab_dishwasher_enabled
+- sensor:
+  - name: Virtual Dishwasher Power
+    unique_id: lab_dishwasher_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      %}0{% else %}{% set t = states(''input_number.lab_dishwasher_elapsed'') | float(0)
+      %} {% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'') %}0
+      {% elif not is_state(''input_boolean.lab_dishwasher_enabled'', ''on'') or t
+      >= 5400 %}1 {% elif t < 600 %}30 {% elif t < 3600 %}{{ 1200 if (t - 600) % 600
+      < 180 else 100 }} {% elif t < 4200 %}100 {% else %}600{% endif %}{% endif %}'
+  - name: Virtual Dishwasher Phase
+    unique_id: lab_dishwasher_phase
+    icon: mdi:dishwasher
+    state: '{% set t = states(''input_number.lab_dishwasher_elapsed'') | float(0)
+      %} {% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'') %}No
+      circuit power {% elif t >= 5400 %}Complete {% elif not is_state(''input_boolean.lab_dishwasher_enabled'',
+      ''on'') %}{{ ''Paused'' if t > 0 else ''Ready'' }} {% elif t < 600 %}Pre-rinse
+      {% elif t < 3600 %}{{ ''Heating wash'' if (t - 600) % 600 < 180 else ''Washing''
+      }} {% elif t < 4200 %}Rinsing {% else %}Drying{% endif %}'
+  - name: Virtual Dishwasher Remaining
+    unique_id: lab_dishwasher_remaining
+    device_class: duration
+    unit_of_measurement: min
+    state: '{{ ((5400 - states(''input_number.lab_dishwasher_elapsed'') | float(0))
+      / 60) | round(1) }}'
+sensor:
+- platform: integration
+  source: sensor.virtual_dishwasher_power
+  name: Virtual Dishwasher Energy
+  unique_id: lab_dishwasher_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30
+script:
+  lab_dishwasher_reset:
+    alias: Reset dishwasher cycle
+    sequence:
+    - action: switch.turn_off
+      target:
+        entity_id: switch.virtual_dishwasher
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_dishwasher_elapsed
+      data:
+        value: 0
+  lab_dishwasher_tick:
+    alias: Advance dishwasher simulation
+    mode: single
+    fields:
+      seconds:
+        description: Elapsed simulation seconds from the household clock
+    sequence:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+        and is_state(''input_boolean.lab_dishwasher_enabled'', ''on'') }}'
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_dishwasher_elapsed
+      data:
+        value: '{% set dt = [30, [0, seconds | default(0) | float(0)] | max] | min
+          %} {{ [5400, states(''input_number.lab_dishwasher_elapsed'') | float(0)
+          + dt] | min }}'
+    - if:
+      - condition: template
+        value_template: '{{ states(''input_number.lab_dishwasher_elapsed'') | float(0)
+          >= 5400 }}'
+      then:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.virtual_dishwasher

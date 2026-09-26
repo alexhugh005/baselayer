@@ -1,0 +1,263 @@
+input_boolean:
+  lab_refrigerator_enabled:
+    name: Refrigerator power
+    initial: true
+  lab_toaster_enabled:
+    name: Toaster power
+    initial: false
+  lab_water_heater_enabled:
+    name: Water heater power
+    initial: false
+  lab_water_heater_demand:
+    name: Water heater thermostat demand
+    initial: false
+input_number:
+  lab_toaster_elapsed:
+    name: Toaster elapsed run time
+    min: 0
+    max: 180
+    step: 0.01
+    unit_of_measurement: s
+    mode: box
+  lab_water_temperature:
+    name: Water tank temperature
+    min: 50
+    max: 150
+    step: 0.001
+    unit_of_measurement: °F
+    mode: box
+  lab_water_target:
+    name: Water heater target temperature
+    min: 100
+    max: 140
+    step: 1
+    initial: 120
+    unit_of_measurement: °F
+    mode: box
+  lab_hot_water_draw:
+    name: Hot water draw (scenario)
+    min: 0
+    max: 3
+    step: 0.1
+    initial: 0
+    unit_of_measurement: gal/min
+    mode: slider
+template:
+- switch:
+  - name: Virtual Refrigerator
+    unique_id: lab_refrigerator_switch
+    icon: mdi:fridge
+    state: '{% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      %}false{% else %}{{ is_state(''input_boolean.lab_refrigerator_enabled'', ''on'')
+      }}{% endif %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+        }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_refrigerator_enabled
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lab_refrigerator_enabled
+  - name: Virtual Toaster
+    unique_id: lab_toaster_switch
+    icon: mdi:toaster
+    state: '{% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      %}false{% else %}{{ is_state(''input_boolean.lab_toaster_enabled'', ''on'')
+      }}{% endif %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+        }}'
+    - if:
+      - condition: state
+        entity_id: input_boolean.lab_toaster_enabled
+        state: 'off'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.lab_toaster_elapsed
+        data:
+          value: 0
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_toaster_enabled
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lab_toaster_enabled
+  - name: Virtual Water Heater
+    unique_id: lab_water_heater_switch
+    icon: mdi:water-boiler
+    state: '{% if not is_state(''binary_sensor.lab_span_water_heater_supply'', ''on'')
+      %}false{% else %}{{ is_state(''input_boolean.lab_water_heater_enabled'', ''on'')
+      }}{% endif %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_water_heater_supply'',
+        ''on'') }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_water_heater_enabled
+    - action: script.lab_water_heater_thermostat
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id:
+        - input_boolean.lab_water_heater_enabled
+        - input_boolean.lab_water_heater_demand
+- sensor:
+  - name: Virtual Toaster Power
+    unique_id: lab_toaster_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      %}0{% else %}{{ 1200 if is_state(''input_boolean.lab_toaster_enabled'', ''on'')
+      and states(''input_number.lab_toaster_elapsed'') | float(0) < 180 else 0 }}{%
+      endif %}'
+  - name: Virtual Toaster Status
+    unique_id: lab_toaster_status
+    state: '{% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      %}No circuit power{% else %}{% if states(''input_number.lab_toaster_elapsed'')
+      | float(0) >= 180 %}Complete {% elif is_state(''input_boolean.lab_toaster_enabled'',
+      ''on'') %}Toasting {% else %}Ready{% endif %}{% endif %}'
+  - name: Virtual Water Heater Power
+    unique_id: lab_water_heater_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{% if not is_state(''binary_sensor.lab_span_water_heater_supply'', ''on'')
+      %}0{% else %}{{ 4500 if is_state(''input_boolean.lab_water_heater_enabled'',
+      ''on'') and is_state(''input_boolean.lab_water_heater_demand'', ''on'') else
+      2 if is_state(''input_boolean.lab_water_heater_enabled'', ''on'') else 0 }}{%
+      endif %}'
+  - name: Virtual Water Temperature
+    unique_id: lab_water_temperature_sensor
+    device_class: temperature
+    state_class: measurement
+    unit_of_measurement: °F
+    state: '{{ states(''input_number.lab_water_temperature'') }}'
+  - name: Virtual Water Heater Status
+    unique_id: lab_water_heater_status
+    state: '{% if not is_state(''binary_sensor.lab_span_water_heater_supply'', ''on'')
+      %}No circuit power{% else %}{% if not is_state(''input_boolean.lab_water_heater_enabled'',
+      ''on'') %}Off {% elif is_state(''input_boolean.lab_water_heater_demand'', ''on'')
+      %}Heating {% else %}At temperature{% endif %}{% endif %}'
+sensor:
+- platform: integration
+  source: sensor.virtual_refrigerator_power
+  name: Virtual Refrigerator Energy
+  unique_id: lab_refrigerator_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30
+- platform: integration
+  source: sensor.virtual_toaster_power
+  name: Virtual Toaster Energy
+  unique_id: lab_toaster_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30
+- platform: integration
+  source: sensor.virtual_water_heater_power
+  name: Virtual Water Heater Energy
+  unique_id: lab_water_heater_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30
+script:
+  lab_kitchen_and_water_reset:
+    alias: Reset kitchen and hot water
+    sequence:
+    - action: switch.turn_off
+      target:
+        entity_id:
+        - switch.virtual_toaster
+        - switch.virtual_water_heater
+    - action: switch.turn_on
+      target:
+        entity_id: switch.virtual_refrigerator
+    - action: input_number.set_value
+      target:
+        entity_id:
+        - input_number.lab_toaster_elapsed
+        - input_number.lab_hot_water_draw
+      data:
+        value: 0
+    - action: input_number.set_value
+      target:
+        entity_id:
+        - input_number.lab_water_temperature
+        - input_number.lab_water_target
+      data:
+        value: 120
+  lab_water_heater_thermostat:
+    alias: Update water heater thermostat
+    sequence:
+    - choose:
+      - conditions: "{{ not is_state('input_boolean.lab_water_heater_enabled', 'on')\
+          \ or\n   states('input_number.lab_water_temperature') | float(120) >= states('input_number.lab_water_target')\
+          \ | float(120) }}"
+        sequence:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.lab_water_heater_demand
+      - conditions: '{{ states(''input_number.lab_water_temperature'') | float(120)
+          <= states(''input_number.lab_water_target'') | float(120) - 5 }}'
+        sequence:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.lab_water_heater_demand
+  lab_kitchen_and_water_tick:
+    alias: Advance kitchen and hot water simulation
+    fields:
+      seconds:
+        description: Elapsed simulation seconds from the household clock
+    sequence:
+    - variables:
+        dt: '{{ [30, [0, seconds | default(0) | float(0)] | max] | min }}'
+        tank: '{{ states(''input_number.lab_water_temperature'') | float(120) }}'
+    - if:
+      - condition: state
+        entity_id: input_boolean.lab_toaster_enabled
+        state: 'on'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.lab_toaster_elapsed
+        data:
+          value: '{{ [180, states(''input_number.lab_toaster_elapsed'') | float(0)
+            + dt | float(0)] | min }}'
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_number.lab_toaster_elapsed'') | float(0)
+            >= 180 }}'
+        then:
+        - action: switch.turn_off
+          target:
+            entity_id: switch.virtual_toaster
+    - action: script.lab_water_heater_thermostat
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_water_temperature
+      data:
+        value: '{% set heat = 4500 if states(''sensor.virtual_water_heater_power'')
+          | float(0) >= 4500 else 0 %} {% set room = states(''input_number.lab_room_temperature'')
+          | float(68) %} {% set loss = 2 * ((tank | float(120) - room) / 1.8) %} {%
+          set cooling = states(''input_number.lab_hot_water_draw'') | float(0) / 60
+          / 50 * (tank | float(120) - 55) * dt | float(0) %} {{ [150, [50, tank |
+          float(120) + (heat - loss) * dt | float(0) * 1.8 / 792000 - cooling] | max]
+          | min }}'
+    - action: script.lab_water_heater_thermostat

@@ -1,0 +1,162 @@
+input_number:
+  lab_light_brightness:
+    name: Light brightness backing value
+    min: 0
+    max: 255
+    step: 1
+    initial: 180
+  lab_room_temperature:
+    name: Simulated room temperature
+    min: 50
+    max: 95
+    step: 0.001
+    unit_of_measurement: °F
+  lab_outdoor_temperature:
+    name: Outdoor temperature (scenario)
+    min: 10
+    max: 110
+    step: 0.5
+    initial: 55
+    mode: box
+    unit_of_measurement: °F
+  lab_fan_percentage:
+    name: Ceiling fan speed
+    min: 0
+    max: 100
+    step: 1
+    initial: 66
+    mode: box
+    unit_of_measurement: '%'
+input_boolean:
+  lab_light_on:
+    name: Light backing switch
+    initial: true
+  lab_fan_on:
+    name: Fan backing switch
+    initial: false
+  lab_hvac_on:
+    name: Virtual HVAC relay
+    initial: false
+template:
+- light:
+  - name: Virtual Living Room Light
+    unique_id: lab_living_room_light
+    state: '{% if not is_state(''binary_sensor.lab_span_living_room_supply'', ''on'')
+      %}false{% else %}{{ is_state(''input_boolean.lab_light_on'', ''on'') }}{% endif
+      %}'
+    level: '{{ states(''input_number.lab_light_brightness'') | int(0) }}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_living_room_supply'',
+        ''on'') }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_light_on
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lab_light_on
+    set_level:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_living_room_supply'',
+        ''on'') }}'
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_light_brightness
+      data:
+        value: '{{ brightness }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_light_on
+- fan:
+  - name: Virtual Ceiling Fan
+    unique_id: lab_ceiling_fan
+    state: '{% if not is_state(''binary_sensor.lab_span_living_room_supply'', ''on'')
+      %}false{% else %}{{ is_state(''input_boolean.lab_fan_on'', ''on'') }}{% endif
+      %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_living_room_supply'',
+        ''on'') }}'
+    - if:
+      - condition: template
+        value_template: '{{ states(''input_number.lab_fan_percentage'') | int(0) ==
+          0 }}'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.lab_fan_percentage
+        data:
+          value: 66
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_fan_on
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lab_fan_on
+    percentage: '{{ states(''input_number.lab_fan_percentage'') | int(66) if is_state(''input_boolean.lab_fan_on'',''on'')
+      else 0 }}'
+    speed_count: 3
+    set_percentage:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_living_room_supply'',
+        ''on'') }}'
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_fan_percentage
+      data:
+        value: '{{ percentage }}'
+    - action: input_boolean.turn_{{ 'on' if percentage > 0 else 'off' }}
+      target:
+        entity_id: input_boolean.lab_fan_on
+- sensor:
+  - name: Virtual Room Temperature
+    unique_id: lab_room_temperature
+    device_class: temperature
+    state_class: measurement
+    unit_of_measurement: °F
+    state: '{{ states(''input_number.lab_room_temperature'') }}'
+  - name: Virtual Living Room Light Power
+    unique_id: lab_light_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{% if not is_state(''binary_sensor.lab_span_living_room_supply'', ''on'')
+      %}0{% else %}{{ (1.5 + 10.5 * (states(''input_number.lab_light_brightness'')
+      | float(0) / 255) ** 0.8) | round(2) if is_state(''input_boolean.lab_light_on'',''on'')
+      else 0.4 }}{% endif %}'
+  - name: Virtual Ceiling Fan Power
+    unique_id: lab_fan_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{% if not is_state(''binary_sensor.lab_span_living_room_supply'', ''on'')
+      %}0{% else %}{% set p = states(''input_number.lab_fan_percentage'') | int(0)
+      %} {{ (18 if p <= 33 else 35 if p <= 66 else 60) if is_state(''input_boolean.lab_fan_on'',''on'')
+      else 0.5 }}{% endif %}'
+  - name: Virtual HVAC Power
+    unique_id: lab_hvac_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{% if not is_state(''binary_sensor.lab_span_hvac_supply'', ''on'') %}0{%
+      else %}{{ 3000 if is_state(''input_boolean.lab_hvac_on'',''on'') else 8 }}{%
+      endif %}'
+climate:
+- platform: generic_thermostat
+  name: Virtual Room Thermostat
+  unique_id: lab_room_thermostat
+  heater: input_boolean.lab_hvac_on
+  target_sensor: sensor.virtual_room_temperature
+  min_temp: 59
+  max_temp: 86
+  target_temp: 70
+  initial_hvac_mode: 'off'
+  cold_tolerance: 0.54
+  hot_tolerance: 0.54
+  precision: 0.5
+  min_cycle_duration:
+    minutes: 3
+  cycle_cooldown:
+    minutes: 3

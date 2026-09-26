@@ -1,0 +1,204 @@
+input_boolean:
+  heater_enabled:
+    name: Virtual Heater power state
+    initial: false
+  dryer_enabled:
+    name: Virtual Dryer power state
+    initial: false
+  lamp_enabled:
+    name: Virtual Desk Lamp power state
+    initial: true
+  lab_heater_demand:
+    name: Space heater thermostat demand
+    initial: false
+input_number:
+  heater_watts:
+    name: Space heater rated power
+    min: 750
+    max: 1500
+    step: 750
+    initial: 1500
+    unit_of_measurement: W
+    mode: slider
+  lamp_watts:
+    name: LED desk lamp rated power
+    min: 4
+    max: 15
+    step: 1
+    initial: 12
+    unit_of_measurement: W
+    mode: slider
+  lab_heater_target:
+    name: Space heater target
+    min: 60
+    max: 80
+    step: 0.5
+    initial: 70
+    mode: box
+    unit_of_measurement: °F
+  lab_dryer_elapsed:
+    name: Dryer elapsed run time
+    min: 0
+    max: 2700
+    step: 0.01
+    mode: box
+    unit_of_measurement: s
+template:
+- switch:
+  - name: Virtual Heater
+    unique_id: energy_lab_heater_switch
+    icon: mdi:radiator
+    state: '{% if not is_state(''binary_sensor.lab_span_office_supply'', ''on'') %}false{%
+      else %}{{ is_state(''input_boolean.heater_enabled'', ''on'') }}{% endif %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_office_supply'', ''on'')
+        }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.heater_enabled
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.heater_enabled
+  - name: Virtual Dryer
+    unique_id: energy_lab_dryer_switch
+    icon: mdi:tumble-dryer
+    state: '{% if not is_state(''binary_sensor.lab_span_laundry_supply'', ''on'')
+      %}false{% else %}{{ is_state(''input_boolean.dryer_enabled'', ''on'') }}{% endif
+      %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_laundry_supply'', ''on'')
+        }}'
+    - if:
+      - condition: template
+        value_template: '{{ states(''input_number.lab_dryer_elapsed'') | float(0)
+          >= 2700 }}'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.lab_dryer_elapsed
+        data:
+          value: 0
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.dryer_enabled
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.dryer_enabled
+  - name: Virtual Desk Lamp
+    unique_id: energy_lab_lamp_switch
+    icon: mdi:desk-lamp
+    state: '{% if not is_state(''binary_sensor.lab_span_office_supply'', ''on'') %}false{%
+      else %}{{ is_state(''input_boolean.lamp_enabled'', ''on'') }}{% endif %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_office_supply'', ''on'')
+        }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lamp_enabled
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lamp_enabled
+- sensor:
+  - name: Virtual Heater Power
+    unique_id: energy_lab_heater_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    state: '{% if not is_state(''binary_sensor.lab_span_office_supply'', ''on'') %}0{%
+      else %}{{ states(''input_number.heater_watts'') | float(1500) if is_state(''input_boolean.heater_enabled'',''on'')
+      and is_state(''input_boolean.lab_heater_demand'',''on'') else 0.5 }}{% endif
+      %}'
+  - name: Virtual Dryer Power
+    unique_id: energy_lab_dryer_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    state: '{% if not is_state(''binary_sensor.lab_span_laundry_supply'', ''on'')
+      %}0{% else %}{% set t = states(''input_number.lab_dryer_elapsed'') | float(0)
+      %} {{ (5000 if t < 2400 and t % 360 < 240 else 300) if is_state(''input_boolean.dryer_enabled'',''on'')
+      and t < 2700 else 1 }}{% endif %}'
+  - name: Virtual Desk Lamp Power
+    unique_id: energy_lab_lamp_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    state: '{% if not is_state(''binary_sensor.lab_span_office_supply'', ''on'') %}0{%
+      else %}{{ states(''input_number.lamp_watts'') | float(0) if is_state(''input_boolean.lamp_enabled'',
+      ''on'') else 0 }}{% endif %}'
+  - name: Virtual Dryer Phase
+    unique_id: lab_dryer_phase
+    state: '{% if not is_state(''binary_sensor.lab_span_laundry_supply'', ''on'')
+      %}No circuit power{% else %}{% set t = states(''input_number.lab_dryer_elapsed'')
+      | float(0) %} {% if t >= 2700 %}Complete{% elif not is_state(''input_boolean.dryer_enabled'',''on'')
+      %}{{ ''Paused'' if t > 0 else ''Ready'' }}{% elif t >= 2400 %}Cool down{% elif
+      t % 360 < 240 %}Heating{% else %}Tumbling{% endif %}{% endif %}'
+sensor:
+- platform: integration
+  source: sensor.virtual_heater_power
+  name: Virtual Heater Energy
+  unique_id: energy_lab_heater_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30
+- platform: integration
+  source: sensor.virtual_dryer_power
+  name: Virtual Dryer Energy
+  unique_id: energy_lab_dryer_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30
+- platform: integration
+  source: sensor.virtual_desk_lamp_power
+  name: Virtual Desk Lamp Energy
+  unique_id: energy_lab_lamp_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30
+script:
+  lab_reset:
+    alias: Reset virtual devices
+    sequence:
+    - action: input_boolean.turn_off
+      target:
+        entity_id:
+        - input_boolean.heater_enabled
+        - input_boolean.dryer_enabled
+        - input_boolean.lab_heater_demand
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lamp_enabled
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.heater_watts
+      data:
+        value: 1500
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lamp_watts
+      data:
+        value: 12
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_dryer_elapsed
+      data:
+        value: 0
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_heater_target
+      data:
+        value: 70

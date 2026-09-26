@@ -1,0 +1,375 @@
+title: Johnson Household
+views:
+- title: Virtual Devices
+  path: devices
+  icon: mdi:home-lightning-bolt
+  cards:
+  - type: markdown
+    content: '# Johnson Household
+
+      Real-time simulated appliances with operating cycles and standby power. These
+      are illustrative household models, not readings from physical hardware.
+
+
+      **Busy household** starts a 45-minute dryer cycle and 32 A EV charging (~13
+      kW initially). **Reset** returns to a quiet home. No physical hardware is connected.'
+  - type: gauge
+    entity: sensor.virtual_household_power
+    name: Household power (W)
+    min: 0
+    max: 20000
+    severity:
+      green: 0
+      yellow: 9000
+      red: 11000
+  - type: entities
+    title: Household power
+    show_header_toggle: false
+    entities:
+    - sensor.virtual_household_power
+    - sensor.virtual_background_power
+    - sensor.virtual_refrigerator_power
+    - input_number.base_layer_background_watts
+    - script.base_layer_overload
+    - script.base_layer_reset
+    - input_boolean.lab_simulation_running
+  - type: entities
+    title: Refrigerator · compressor cycle
+    show_header_toggle: false
+    entities:
+    - switch.virtual_refrigerator
+    - sensor.virtual_refrigerator_power
+    - sensor.virtual_refrigerator_energy
+  - type: entities
+    title: Toaster · 3-minute cycle
+    show_header_toggle: false
+    entities:
+    - switch.virtual_toaster
+    - sensor.virtual_toaster_status
+    - input_number.lab_toaster_elapsed
+    - sensor.virtual_toaster_power
+    - sensor.virtual_toaster_energy
+  - type: entities
+    title: Dishwasher · 90-minute cycle
+    show_header_toggle: false
+    entities:
+    - switch.virtual_dishwasher
+    - sensor.virtual_dishwasher_phase
+    - sensor.virtual_dishwasher_remaining
+    - sensor.virtual_dishwasher_power
+    - sensor.virtual_dishwasher_energy
+    - script.lab_dishwasher_reset
+  - type: entities
+    title: Water heater · 50-gallon tank
+    show_header_toggle: false
+    entities:
+    - switch.virtual_water_heater
+    - sensor.virtual_water_heater_status
+    - sensor.virtual_water_temperature
+    - input_number.lab_water_target
+    - input_number.lab_hot_water_draw
+    - sensor.virtual_water_heater_power
+    - sensor.virtual_water_heater_energy
+  - type: entities
+    title: Dryer · 45-minute cycle
+    show_header_toggle: false
+    entities:
+    - switch.virtual_dryer
+    - sensor.virtual_dryer_phase
+    - input_number.lab_dryer_elapsed
+    - sensor.virtual_dryer_power
+    - sensor.virtual_dryer_energy
+  - type: entities
+    title: EV · 240 V Level 2
+    show_header_toggle: false
+    entities:
+    - switch.virtual_ev_charger
+    - input_boolean.virtual_ev_plugged_in
+    - input_number.virtual_ev_current_limit
+    - sensor.virtual_ev_battery_charge
+    - input_number.lab_ev_target
+    - input_number.lab_ev_capacity
+    - sensor.virtual_ev_charger_status
+    - sensor.virtual_ev_charger_power
+    - sensor.virtual_ev_charger_energy
+  - type: entities
+    title: Space heater · 750 / 1,500 W
+    show_header_toggle: false
+    entities:
+    - switch.virtual_heater
+    - input_number.heater_watts
+    - input_number.lab_heater_target
+    - sensor.virtual_heater_power
+    - sensor.virtual_heater_energy
+  - &id001
+    type: thermostat
+    entity: climate.virtual_room_thermostat
+    name: Central heat pump · heating mode
+  - &id002
+    type: entities
+    title: Indoor temperature and heating
+    show_header_toggle: false
+    entities:
+    - sensor.virtual_room_temperature
+    - input_number.lab_outdoor_temperature
+    - sensor.virtual_hvac_power
+  - &id003
+    type: entities
+    title: Lighting and fan
+    show_header_toggle: false
+    entities:
+    - switch.virtual_desk_lamp
+    - input_number.lamp_watts
+    - sensor.virtual_desk_lamp_power
+    - light.virtual_living_room_light
+    - sensor.virtual_living_room_light_power
+    - fan.virtual_ceiling_fan
+    - sensor.virtual_ceiling_fan_power
+  - &id004
+    type: markdown
+    content: '**Model details**
+
+      - Dryer: 5,000 W heating, 300 W tumbling/cool down, 1 W standby. Pausing preserves
+      cycle progress; enabling a completed cycle starts a new load.
+
+      - Heater: thermostat controlled, 0.5 W standby.
+
+      - Heat pump: 3,000 W running / 8 W idle; enable Heat to warm the modeled home.
+      Outdoor temperature and heat loss affect indoor temperature automatically. Heating
+      only.
+
+      - EV: 75 kWh default battery, 90% charging efficiency, illustrative taper above
+      80%, automatic stop at the charge target, 3 W EVSE standby.
+
+      - Background: 180 W electronics plus refrigerator at 150 W for 10 of every 30
+      minutes (3 W idle, 0 W switched off).
+
+      - Toaster: 1,200 W for 3 minutes, then automatic shutoff; off cancels the cycle.
+
+      - Water heater: 4,500 W element in a 50-gallon tank; target defaults to 120°F,
+      reheats 5°F below target. Hot-water draw replaces tank water with 55°F inlet
+      water.
+
+      - Time runs at normal speed. Model parameters are examples, not manufacturer
+      calibration. The 11 kW threshold is Base Layer’s demo control limit, not household
+      service capacity.'
+  - type: history-graph
+    title: Power over time
+    hours_to_show: 1
+    entities:
+    - sensor.virtual_household_power
+    - sensor.virtual_dryer_power
+    - sensor.virtual_ev_charger_power
+    - sensor.virtual_hvac_power
+    - sensor.virtual_toaster_power
+    - sensor.virtual_water_heater_power
+    - sensor.virtual_dishwasher_power
+- title: Standard Devices
+  path: standard
+  icon: mdi:devices
+  cards:
+  - type: markdown
+    content: '# Temperature, lighting and fan
+
+      Indoor temperature evolves automatically. Adjust outdoor temperature to explore
+      heat loss. The central system models a heat pump in heating mode.'
+  - *id001
+  - *id002
+  - type: light
+    entity: light.virtual_living_room_light
+  - *id003
+  - type: entities
+    title: Scenario setup
+    show_header_toggle: false
+    entities:
+    - input_number.lab_room_temperature
+    - input_number.lab_water_temperature
+    - input_number.lab_ev_soc
+    - input_number.lab_fan_percentage
+  - *id004
+- title: Smart Panel
+  path: panel
+  icon: mdi:electric-switch
+  cards:
+  - type: markdown
+    content: '# Battery backup outage
+
+      1. Turn on **Grid outage · battery backup**. All circuits start off.
+
+      2. Use **Restore on battery** on the circuits you want; then start their appliances.
+
+      3. Turn a **SPAN breaker** off to free its reserved capacity.
+
+      4. Turn the grid outage off, wait 5 seconds, then run **Restore all circuit
+      supplies** and **Reset realistic household**.
+
+
+      The simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Restores
+      reserve the circuit’s maximum modeled load within **10.5 kW**, leaving 500 W
+      headroom. EV charging is capped at **24 A / 5.76 kW** on backup. A blocked restore
+      appears in Notifications. The old whole-house fault cuts all power, including
+      backup; leave it off.'
+  - type: entities
+    title: Battery backup controls
+    show_header_toggle: false
+    entities:
+    - input_boolean.lab_span_grid_outage
+    - binary_sensor.lab_span_backup_ready
+    - sensor.lab_span_battery_charge
+    - sensor.lab_span_battery_energy
+    - sensor.lab_span_battery_power
+    - sensor.lab_span_grid_power
+    - sensor.virtual_household_power
+    - sensor.lab_span_backup_reserved_power
+    - sensor.lab_span_backup_available_power
+    - sensor.lab_span_effective_ev_current
+  - type: markdown
+    content: '# Virtual SPAN smart panel
+
+      Turn on an **area fault** to cut power to that circuit. All assigned devices
+      turn off and draw zero watts. Clear the fault to restore supply, then restart
+      appliances manually. **Breaker** controls operate the real SPAN integration
+      connected to PanelBench.
+
+
+      Fault toggles persist across restarts. This is a virtual fault injection, not
+      a simulation of protective breaker trip curves.'
+  - type: entities
+    title: Panel connection and whole house
+    show_header_toggle: false
+    entities:
+    - binary_sensor.lab_span_bridge_connected
+    - sensor.virtual_household_power
+    - entity: sensor.span_panel_current_power
+      name: SPAN metered total
+    - input_boolean.lab_span_main_outage
+    - script.lab_span_restore_supply
+  - type: button
+    name: Open PanelBench
+    icon: mdi:electric-switch
+    tap_action:
+      action: url
+      url_path: http://localhost:18080
+  - type: entities
+    title: Living Room · 15 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_living_room
+      name: Restore on battery · reserves 73 W
+    - entity: input_boolean.lab_span_living_room_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_living_room_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_living_room_supply
+      name: Circuit power
+    - entity: sensor.lab_span_living_room_power
+      name: Circuit load
+    - light.virtual_living_room_light
+    - fan.virtual_ceiling_fan
+  - type: entities
+    title: Office Outlets · 20 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_office
+      name: Restore on battery · reserves 1,516 W
+    - entity: input_boolean.lab_span_office_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_office_outlets_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_office_supply
+      name: Circuit power
+    - entity: sensor.lab_span_office_power
+      name: Circuit load
+    - switch.virtual_heater
+    - switch.virtual_desk_lamp
+  - type: entities
+    title: Kitchen Outlets · 20 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_kitchen
+      name: Restore on battery · reserves 2,553 W
+    - entity: input_boolean.lab_span_kitchen_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_kitchen_outlets_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_kitchen_supply
+      name: Circuit power
+    - entity: sensor.lab_span_kitchen_power
+      name: Circuit load
+    - switch.virtual_refrigerator
+    - switch.virtual_toaster
+    - switch.virtual_dishwasher
+  - type: entities
+    title: Essential Electronics · 15 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_essentials
+      name: Restore on battery · reserves 500 W
+    - entity: input_boolean.lab_span_essentials_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_essential_electronics_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_essentials_supply
+      name: Circuit power
+    - entity: sensor.lab_span_essentials_power
+      name: Circuit load
+  - type: entities
+    title: Laundry Dryer · 30 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_laundry
+      name: Restore on battery · reserves 5,001 W
+    - entity: input_boolean.lab_span_laundry_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_laundry_dryer_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_laundry_supply
+      name: Circuit power
+    - entity: sensor.lab_span_laundry_power
+      name: Circuit load
+    - switch.virtual_dryer
+  - type: entities
+    title: Garage EV Charger · 60 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_garage
+      name: Restore on battery · reserves 5,760 W
+    - entity: input_boolean.lab_span_garage_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_garage_ev_charger_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_garage_supply
+      name: Circuit power
+    - entity: sensor.lab_span_garage_power
+      name: Circuit load
+    - switch.virtual_ev_charger
+  - type: entities
+    title: Central HVAC · 30 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_hvac
+      name: Restore on battery · reserves 3,008 W
+    - entity: input_boolean.lab_span_hvac_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_central_hvac_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_hvac_supply
+      name: Circuit power
+    - entity: sensor.lab_span_hvac_power
+      name: Circuit load
+    - climate.virtual_room_thermostat
+  - type: entities
+    title: Water Heater · 30 A
+    show_header_toggle: false
+    entities:
+    - entity: script.lab_span_backup_restore_water_heater
+      name: Restore on battery · reserves 4,502 W
+    - entity: input_boolean.lab_span_water_heater_fault
+      name: Area fault · on cuts power
+    - entity: switch.span_panel_water_heater_breaker
+      name: SPAN breaker
+    - entity: binary_sensor.lab_span_water_heater_supply
+      name: Circuit power
+    - entity: sensor.lab_span_water_heater_power
+      name: Circuit load
+    - switch.virtual_water_heater

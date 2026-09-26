@@ -1,0 +1,109 @@
+input_boolean:
+  virtual_ev_plugged_in:
+    name: Virtual EV plugged in
+    icon: mdi:ev-plug-type1
+    initial: true
+  virtual_ev_charging_enabled:
+    name: Virtual EV charging enabled
+    initial: false
+input_number:
+  virtual_ev_current_limit:
+    name: Virtual EV current limit
+    icon: mdi:current-ac
+    min: 6
+    max: 48
+    step: 1
+    initial: 32
+    unit_of_measurement: A
+    mode: slider
+  lab_ev_soc:
+    name: EV battery charge
+    min: 0
+    max: 100
+    step: 0.0001
+    mode: box
+    unit_of_measurement: '%'
+  lab_ev_target:
+    name: EV charge target
+    min: 50
+    max: 100
+    step: 1
+    initial: 80
+    mode: box
+    unit_of_measurement: '%'
+  lab_ev_capacity:
+    name: EV usable battery capacity
+    min: 40
+    max: 120
+    step: 1
+    initial: 75
+    mode: box
+    unit_of_measurement: kWh
+template:
+- switch:
+  - name: Virtual EV Charger
+    unique_id: energy_lab_ev_charger
+    icon: mdi:ev-station
+    state: '{% if not is_state(''binary_sensor.lab_span_garage_supply'', ''on'') %}false{%
+      else %}{{ is_state(''input_boolean.virtual_ev_charging_enabled'', ''on'') }}{%
+      endif %}'
+    turn_on:
+    - condition: template
+      value_template: '{{ is_state(''binary_sensor.lab_span_garage_supply'', ''on'')
+        }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.virtual_ev_charging_enabled
+    turn_off:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.virtual_ev_charging_enabled
+- binary_sensor:
+  - name: Virtual EV Connected
+    unique_id: energy_lab_ev_connected
+    device_class: plug
+    state: '{{ is_state(''input_boolean.virtual_ev_plugged_in'', ''on'') }}'
+- sensor:
+  - name: Virtual EV Charger Status
+    unique_id: energy_lab_ev_status
+    icon: mdi:ev-station
+    state: '{% if not is_state(''binary_sensor.lab_span_garage_supply'', ''on'') %}No
+      circuit power{% else %}{% if not is_state(''input_boolean.virtual_ev_plugged_in'',''on'')
+      %}Disconnected{% elif states(''input_number.lab_ev_soc'') | float(0) >= states(''input_number.lab_ev_target'')
+      | float(80) %}Complete{% elif not is_state(''input_boolean.virtual_ev_charging_enabled'',''on'')
+      %}Paused{% elif states(''input_number.lab_ev_soc'') | float(0) >= 80 %}Tapering{%
+      else %}Charging{% endif %}{% endif %}'
+  - name: Virtual EV Charger Power
+    unique_id: energy_lab_ev_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    availability: '{{ is_number(states(''input_number.virtual_ev_current_limit''))
+      and is_number(states(''input_number.lab_ev_soc'')) and is_number(states(''input_number.lab_ev_target''))
+      and states(''input_boolean.virtual_ev_plugged_in'') in [''on'',''off''] and
+      states(''input_boolean.virtual_ev_charging_enabled'') in [''on'',''off''] }}'
+    state: '{% if not is_state(''binary_sensor.lab_span_garage_supply'', ''on'') %}0{%
+      else %}{% set soc = states(''input_number.lab_ev_soc'') | float(0) %} {% set
+      target = states(''input_number.lab_ev_target'') | float(80) %} {% set taper
+      = [0.1, (100 - soc) / 20] | max if soc >= 80 else 1 %} {{ (240 * ([states(''input_number.virtual_ev_current_limit'')
+      | float(32), 24] | min if is_state(''input_boolean.lab_span_grid_outage'', ''on'')
+      else states(''input_number.virtual_ev_current_limit'') | float(32)) * taper)
+      | round(2) if is_state(''input_boolean.virtual_ev_plugged_in'',''on'') and is_state(''input_boolean.virtual_ev_charging_enabled'',''on'')
+      and soc < target else 3 }}{% endif %}'
+  - name: Virtual EV Battery Charge
+    unique_id: lab_ev_soc_sensor
+    state: '{{ states(''input_number.lab_ev_soc'') | float(0) | round(2) }}'
+    unit_of_measurement: '%'
+    device_class: battery
+    state_class: measurement
+sensor:
+- platform: integration
+  source: sensor.virtual_ev_charger_power
+  name: Virtual EV Charger Energy
+  unique_id: energy_lab_ev_energy
+  unit_prefix: k
+  unit_time: h
+  method: left
+  round: 5
+  max_sub_interval:
+    seconds: 30

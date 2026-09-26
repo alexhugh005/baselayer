@@ -1,0 +1,1579 @@
+input_boolean:
+  lab_span_main_outage:
+    name: Whole-house power outage
+    icon: mdi:transmission-tower-off
+  lab_span_living_room_fault:
+    name: Living Room · Living Room fault
+    icon: mdi:flash-alert
+  lab_span_office_fault:
+    name: Office · Office Outlets fault
+    icon: mdi:flash-alert
+  lab_span_kitchen_fault:
+    name: Kitchen · Kitchen Outlets fault
+    icon: mdi:flash-alert
+  lab_span_essentials_fault:
+    name: Utility · Essential Electronics fault
+    icon: mdi:flash-alert
+  lab_span_laundry_fault:
+    name: Laundry · Laundry Dryer fault
+    icon: mdi:flash-alert
+  lab_span_garage_fault:
+    name: Garage · Garage EV Charger fault
+    icon: mdi:flash-alert
+  lab_span_hvac_fault:
+    name: Utility · Central HVAC fault
+    icon: mdi:flash-alert
+  lab_span_water_heater_fault:
+    name: Utility · Water Heater fault
+    icon: mdi:flash-alert
+  lab_span_grid_outage:
+    name: Grid outage · battery backup
+    icon: mdi:transmission-tower-off
+  lab_span_backup_living_room:
+    name: Backup reservation living_room
+    initial: false
+  lab_span_backup_office:
+    name: Backup reservation office
+    initial: false
+  lab_span_backup_kitchen:
+    name: Backup reservation kitchen
+    initial: false
+  lab_span_backup_essentials:
+    name: Backup reservation essentials
+    initial: false
+  lab_span_backup_laundry:
+    name: Backup reservation laundry
+    initial: false
+  lab_span_backup_garage:
+    name: Backup reservation garage
+    initial: false
+  lab_span_backup_hvac:
+    name: Backup reservation hvac
+    initial: false
+  lab_span_backup_water_heater:
+    name: Backup reservation water_heater
+    initial: false
+rest:
+- resource: http://basehack-panelbench:18081/health
+  scan_interval: 2
+  binary_sensor:
+  - name: Lab SPAN Bridge Connected
+    unique_id: lab_span_bridge_connected
+    device_class: connectivity
+    value_template: '{{ value_json.connected }}'
+  - name: Lab SPAN Backup Ready
+    unique_id: lab_span_backup_ready
+    value_template: '{{ value_json.connected and value_json.grid_online == false and
+      value_json.battery is not none and value_json.battery.stored_energy_kwh > 0.001
+      }}'
+  sensor:
+  - name: Lab SPAN Battery Charge
+    unique_id: lab_span_battery_charge
+    unit_of_measurement: '%'
+    device_class: battery
+    value_template: '{{ value_json.battery.soc_percent | round(3) }}'
+    availability: '{{ value_json.connected and value_json.battery is not none }}'
+  - name: Lab SPAN Battery Energy
+    unique_id: lab_span_battery_energy
+    unit_of_measurement: kWh
+    device_class: energy
+    value_template: '{{ value_json.battery.stored_energy_kwh }}'
+    availability: '{{ value_json.connected and value_json.battery is not none }}'
+  - name: Lab SPAN Battery Power
+    unique_id: lab_span_battery_power
+    unit_of_measurement: W
+    device_class: power
+    value_template: '{{ value_json.battery.discharge_watts | round(1) }}'
+    availability: '{{ value_json.connected and value_json.battery is not none }}'
+  - name: Lab SPAN Grid Power
+    unique_id: lab_span_grid_power
+    unit_of_measurement: W
+    device_class: power
+    value_template: '{{ value_json.grid_watts | round(1) }}'
+    availability: '{{ value_json.connected }}'
+template:
+- binary_sensor:
+  - name: Lab SPAN living_room Supply
+    unique_id: lab_span_living_room_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_living_room_breaker'', ''on'') and is_state(''input_boolean.lab_span_living_room_fault'',
+      ''off'') and is_state(''input_boolean.lab_span_main_outage'', ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'',
+      ''on'') and (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_living_room'', ''on'')
+      and is_state(''binary_sensor.lab_span_backup_ready'', ''on'') and states(''sensor.lab_span_backup_reserved_power'')
+      | float(99999) <= 10500)) }}'
+    attributes:
+      circuit: Living Room
+      devices: '{{ [''light.virtual_living_room_light'', ''fan.virtual_ceiling_fan'']
+        }}'
+      breaker_amps: '15'
+  - name: Lab SPAN office Supply
+    unique_id: lab_span_office_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_office_outlets_breaker'', ''on'') and
+      is_state(''input_boolean.lab_span_office_fault'', ''off'') and is_state(''input_boolean.lab_span_main_outage'',
+      ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'', ''on'') and
+      (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_office'', ''on'') and is_state(''binary_sensor.lab_span_backup_ready'',
+      ''on'') and states(''sensor.lab_span_backup_reserved_power'') | float(99999)
+      <= 10500)) }}'
+    attributes:
+      circuit: Office Outlets
+      devices: '{{ [''switch.virtual_heater'', ''switch.virtual_desk_lamp''] }}'
+      breaker_amps: '20'
+  - name: Lab SPAN kitchen Supply
+    unique_id: lab_span_kitchen_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_kitchen_outlets_breaker'', ''on'') and
+      is_state(''input_boolean.lab_span_kitchen_fault'', ''off'') and is_state(''input_boolean.lab_span_main_outage'',
+      ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'', ''on'') and
+      (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_kitchen'', ''on'') and
+      is_state(''binary_sensor.lab_span_backup_ready'', ''on'') and states(''sensor.lab_span_backup_reserved_power'')
+      | float(99999) <= 10500)) }}'
+    attributes:
+      circuit: Kitchen Outlets
+      devices: '{{ [''switch.virtual_refrigerator'', ''switch.virtual_toaster'', ''switch.virtual_dishwasher'']
+        }}'
+      breaker_amps: '20'
+  - name: Lab SPAN essentials Supply
+    unique_id: lab_span_essentials_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_essential_electronics_breaker'', ''on'')
+      and is_state(''input_boolean.lab_span_essentials_fault'', ''off'') and is_state(''input_boolean.lab_span_main_outage'',
+      ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'', ''on'') and
+      (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_essentials'', ''on'') and
+      is_state(''binary_sensor.lab_span_backup_ready'', ''on'') and states(''sensor.lab_span_backup_reserved_power'')
+      | float(99999) <= 10500)) }}'
+    attributes:
+      circuit: Essential Electronics
+      devices: '{{ [] }}'
+      breaker_amps: '15'
+  - name: Lab SPAN laundry Supply
+    unique_id: lab_span_laundry_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_laundry_dryer_breaker'', ''on'') and is_state(''input_boolean.lab_span_laundry_fault'',
+      ''off'') and is_state(''input_boolean.lab_span_main_outage'', ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'',
+      ''on'') and (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_laundry'', ''on'') and
+      is_state(''binary_sensor.lab_span_backup_ready'', ''on'') and states(''sensor.lab_span_backup_reserved_power'')
+      | float(99999) <= 10500)) }}'
+    attributes:
+      circuit: Laundry Dryer
+      devices: '{{ [''switch.virtual_dryer''] }}'
+      breaker_amps: '30'
+  - name: Lab SPAN garage Supply
+    unique_id: lab_span_garage_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_garage_ev_charger_breaker'', ''on'') and
+      is_state(''input_boolean.lab_span_garage_fault'', ''off'') and is_state(''input_boolean.lab_span_main_outage'',
+      ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'', ''on'') and
+      (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_garage'', ''on'') and is_state(''binary_sensor.lab_span_backup_ready'',
+      ''on'') and states(''sensor.lab_span_backup_reserved_power'') | float(99999)
+      <= 10500)) }}'
+    attributes:
+      circuit: Garage EV Charger
+      devices: '{{ [''switch.virtual_ev_charger''] }}'
+      breaker_amps: '60'
+  - name: Lab SPAN hvac Supply
+    unique_id: lab_span_hvac_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_central_hvac_breaker'', ''on'') and is_state(''input_boolean.lab_span_hvac_fault'',
+      ''off'') and is_state(''input_boolean.lab_span_main_outage'', ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'',
+      ''on'') and (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_hvac'', ''on'') and is_state(''binary_sensor.lab_span_backup_ready'',
+      ''on'') and states(''sensor.lab_span_backup_reserved_power'') | float(99999)
+      <= 10500)) }}'
+    attributes:
+      circuit: Central HVAC
+      devices: '{{ [''climate.virtual_room_thermostat''] }}'
+      breaker_amps: '30'
+  - name: Lab SPAN water_heater Supply
+    unique_id: lab_span_water_heater_supply
+    device_class: power
+    state: '{{ is_state(''switch.span_panel_water_heater_breaker'', ''on'') and is_state(''input_boolean.lab_span_water_heater_fault'',
+      ''off'') and is_state(''input_boolean.lab_span_main_outage'', ''off'') and is_state(''binary_sensor.lab_span_bridge_connected'',
+      ''on'') and (is_state(''input_boolean.lab_span_grid_outage'', ''off'') or (is_state(''input_boolean.lab_span_grid_outage'',
+      ''on'') and is_state(''input_boolean.lab_span_backup_water_heater'', ''on'')
+      and is_state(''binary_sensor.lab_span_backup_ready'', ''on'') and states(''sensor.lab_span_backup_reserved_power'')
+      | float(99999) <= 10500)) }}'
+    attributes:
+      circuit: Water Heater
+      devices: '{{ [''switch.virtual_water_heater''] }}'
+      breaker_amps: '30'
+- sensor:
+  - name: Lab SPAN living_room Power
+    unique_id: lab_span_living_room_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_living_room_light_power'') | float(0) + states(''sensor.virtual_ceiling_fan_power'')
+      | float(0)) | round(2) }}'
+  - name: Lab SPAN office Power
+    unique_id: lab_span_office_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_heater_power'') | float(0) + states(''sensor.virtual_desk_lamp_power'')
+      | float(0)) | round(2) }}'
+  - name: Lab SPAN kitchen Power
+    unique_id: lab_span_kitchen_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_refrigerator_power'') | float(0) + states(''sensor.virtual_toaster_power'')
+      | float(0) + states(''sensor.virtual_dishwasher_power'') | float(0)) | round(2)
+      }}'
+  - name: Lab SPAN essentials Power
+    unique_id: lab_span_essentials_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_electronics_power'') | float(0)) | round(2)
+      }}'
+  - name: Lab SPAN laundry Power
+    unique_id: lab_span_laundry_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_dryer_power'') | float(0)) | round(2) }}'
+  - name: Lab SPAN garage Power
+    unique_id: lab_span_garage_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_ev_charger_power'') | float(0)) | round(2)
+      }}'
+  - name: Lab SPAN hvac Power
+    unique_id: lab_span_hvac_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_hvac_power'') | float(0)) | round(2) }}'
+  - name: Lab SPAN water_heater Power
+    unique_id: lab_span_water_heater_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{{ (states(''sensor.virtual_water_heater_power'') | float(0)) | round(2)
+      }}'
+  - name: Virtual Electronics Power
+    unique_id: lab_electronics_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    state: '{% if not is_state(''binary_sensor.lab_span_essentials_supply'', ''on'')
+      %}0{% else %}{{ states(''input_number.base_layer_background_watts'') | float(180)
+      }}{% endif %}'
+  - name: Lab SPAN Backup Reserved Power
+    unique_id: lab_span_backup_reserved_power
+    unit_of_measurement: W
+    device_class: power
+    state: '{{ (73 if is_state(''input_boolean.lab_span_backup_living_room'', ''on'')
+      else 0) + (1516 if is_state(''input_boolean.lab_span_backup_office'', ''on'')
+      else 0) + (2553 if is_state(''input_boolean.lab_span_backup_kitchen'', ''on'')
+      else 0) + (500 if is_state(''input_boolean.lab_span_backup_essentials'', ''on'')
+      else 0) + (5001 if is_state(''input_boolean.lab_span_backup_laundry'', ''on'')
+      else 0) + (5760 if is_state(''input_boolean.lab_span_backup_garage'', ''on'')
+      else 0) + (3008 if is_state(''input_boolean.lab_span_backup_hvac'', ''on'')
+      else 0) + (4502 if is_state(''input_boolean.lab_span_backup_water_heater'',
+      ''on'') else 0) }}'
+  - name: Lab SPAN Backup Available Power
+    unique_id: lab_span_backup_available_power
+    unit_of_measurement: W
+    device_class: power
+    state: '{{ [0, 10500 - states(''sensor.lab_span_backup_reserved_power'') | float(0)]
+      | max }}'
+  - name: Lab SPAN Effective EV Current
+    unique_id: lab_span_effective_ev_current
+    unit_of_measurement: A
+    state: '{% set amps = states(''input_number.virtual_ev_current_limit'') | float(32)
+      %}{{ [amps, 24] | min if is_state(''input_boolean.lab_span_grid_outage'', ''on'')
+      else amps }}'
+automation:
+- id: lab_span_living_room_interlock
+  alias: Lab SPAN living_room power interlock
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.lab_span_living_room_supply
+    - input_boolean.lab_light_on
+    - input_boolean.lab_fan_on
+    - light.virtual_living_room_light
+    - fan.virtual_ceiling_fan
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    seconds: /10
+  conditions:
+  - condition: template
+    value_template: '{{ not is_state(''binary_sensor.lab_span_living_room_supply'',
+      ''on'') }}'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.lab_light_on
+      - input_boolean.lab_fan_on
+- id: lab_span_living_room_fault
+  alias: Lab SPAN living_room fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_living_room_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_living_room_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_living_room_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_living_room_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_living_room_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_living_room_fault'',
+        ''on'') or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_living_room_breaker'', ''off'')
+        }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_living_room_breaker
+- id: lab_span_office_interlock
+  alias: Lab SPAN office power interlock
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.lab_span_office_supply
+    - input_boolean.heater_enabled
+    - input_boolean.lamp_enabled
+    - input_boolean.lab_heater_demand
+    - switch.virtual_heater
+    - switch.virtual_desk_lamp
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    seconds: /10
+  conditions:
+  - condition: template
+    value_template: '{{ not is_state(''binary_sensor.lab_span_office_supply'', ''on'')
+      }}'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.heater_enabled
+      - input_boolean.lamp_enabled
+      - input_boolean.lab_heater_demand
+- id: lab_span_office_fault
+  alias: Lab SPAN office fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_office_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_office_outlets_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_office_fault'', ''on'') or
+        is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_office_outlets_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_office_outlets_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_office_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_office_outlets_breaker'',
+        ''off'') }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_office_outlets_breaker
+- id: lab_span_kitchen_interlock
+  alias: Lab SPAN kitchen power interlock
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.lab_span_kitchen_supply
+    - input_boolean.lab_refrigerator_enabled
+    - input_boolean.lab_toaster_enabled
+    - input_boolean.lab_dishwasher_enabled
+    - switch.virtual_refrigerator
+    - switch.virtual_toaster
+    - switch.virtual_dishwasher
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    seconds: /10
+  conditions:
+  - condition: template
+    value_template: '{{ not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      }}'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.lab_refrigerator_enabled
+      - input_boolean.lab_toaster_enabled
+      - input_boolean.lab_dishwasher_enabled
+- id: lab_span_kitchen_fault
+  alias: Lab SPAN kitchen fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_kitchen_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_kitchen_outlets_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_kitchen_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_kitchen_outlets_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_kitchen_outlets_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_kitchen_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_kitchen_outlets_breaker'',
+        ''off'') }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_kitchen_outlets_breaker
+- id: lab_span_essentials_fault
+  alias: Lab SPAN essentials fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_essentials_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_essential_electronics_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_essentials_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_essential_electronics_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_essential_electronics_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_essentials_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_essential_electronics_breaker'',
+        ''off'') }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_essential_electronics_breaker
+- id: lab_span_laundry_interlock
+  alias: Lab SPAN laundry power interlock
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.lab_span_laundry_supply
+    - input_boolean.dryer_enabled
+    - switch.virtual_dryer
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    seconds: /10
+  conditions:
+  - condition: template
+    value_template: '{{ not is_state(''binary_sensor.lab_span_laundry_supply'', ''on'')
+      }}'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.dryer_enabled
+- id: lab_span_laundry_fault
+  alias: Lab SPAN laundry fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_laundry_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_laundry_dryer_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_laundry_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_laundry_dryer_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_laundry_dryer_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_laundry_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_laundry_dryer_breaker'', ''off'')
+        }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_laundry_dryer_breaker
+- id: lab_span_garage_interlock
+  alias: Lab SPAN garage power interlock
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.lab_span_garage_supply
+    - input_boolean.virtual_ev_charging_enabled
+    - switch.virtual_ev_charger
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    seconds: /10
+  conditions:
+  - condition: template
+    value_template: '{{ not is_state(''binary_sensor.lab_span_garage_supply'', ''on'')
+      }}'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.virtual_ev_charging_enabled
+- id: lab_span_garage_fault
+  alias: Lab SPAN garage fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_garage_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_garage_ev_charger_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_garage_fault'', ''on'') or
+        is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_garage_ev_charger_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_garage_ev_charger_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_garage_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_garage_ev_charger_breaker'',
+        ''off'') }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_garage_ev_charger_breaker
+- id: lab_span_hvac_interlock
+  alias: Lab SPAN hvac power interlock
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.lab_span_hvac_supply
+    - input_boolean.lab_hvac_on
+    - climate.virtual_room_thermostat
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    seconds: /10
+  conditions:
+  - condition: template
+    value_template: '{{ not is_state(''binary_sensor.lab_span_hvac_supply'', ''on'')
+      }}'
+  actions:
+  - if:
+    - condition: template
+      value_template: '{{ states(''climate.virtual_room_thermostat'') not in [''off'',''unknown'',''unavailable'']
+        }}'
+    then:
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.virtual_room_thermostat
+      data:
+        hvac_mode: 'off'
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.lab_hvac_on
+- id: lab_span_hvac_fault
+  alias: Lab SPAN hvac fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_hvac_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_central_hvac_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_hvac_fault'', ''on'') or
+        is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_central_hvac_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_central_hvac_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_hvac_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_central_hvac_breaker'', ''off'')
+        }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_central_hvac_breaker
+- id: lab_span_water_heater_interlock
+  alias: Lab SPAN water_heater power interlock
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.lab_span_water_heater_supply
+    - input_boolean.lab_water_heater_enabled
+    - input_boolean.lab_water_heater_demand
+    - switch.virtual_water_heater
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    seconds: /10
+  conditions:
+  - condition: template
+    value_template: '{{ not is_state(''binary_sensor.lab_span_water_heater_supply'',
+      ''on'') }}'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.lab_water_heater_enabled
+      - input_boolean.lab_water_heater_demand
+- id: lab_span_water_heater_fault
+  alias: Lab SPAN water_heater fault relay
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_water_heater_fault
+    - input_boolean.lab_span_main_outage
+    to:
+    - 'on'
+    - 'off'
+    id: command
+  - trigger: state
+    entity_id: switch.span_panel_water_heater_breaker
+    to: 'on'
+    id: enforce
+  - trigger: time_pattern
+    seconds: /10
+    id: enforce
+  - trigger: homeassistant
+    event: start
+    id: enforce
+  actions:
+  - delay:
+      seconds: 4
+  - choose:
+    - conditions: '{{ (is_state(''input_boolean.lab_span_water_heater_fault'', ''on'')
+        or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and is_state(''switch.span_panel_water_heater_breaker'',
+        ''on'') }}'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.span_panel_water_heater_breaker
+    - conditions: '{{ not (is_state(''input_boolean.lab_span_water_heater_fault'',
+        ''on'') or is_state(''input_boolean.lab_span_main_outage'', ''on'')) and trigger.id
+        == ''command'' and is_state(''switch.span_panel_water_heater_breaker'', ''off'')
+        }}'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_water_heater_breaker
+- id: lab_span_persist_faults
+  alias: Lab SPAN persist fault changes
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.lab_span_main_outage
+    - input_boolean.lab_span_living_room_fault
+    - input_boolean.lab_span_office_fault
+    - input_boolean.lab_span_kitchen_fault
+    - input_boolean.lab_span_essentials_fault
+    - input_boolean.lab_span_laundry_fault
+    - input_boolean.lab_span_garage_fault
+    - input_boolean.lab_span_hvac_fault
+    - input_boolean.lab_span_water_heater_fault
+    to:
+    - 'on'
+    - 'off'
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.from_state is not none }}'
+  actions:
+  - action: homeassistant.save_persistent_states
+- id: lab_span_backup_native_living_room
+  alias: Backup budget for living_room
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_living_room_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_living_room_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_living_room
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_living_room'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: living_room
+- id: lab_span_backup_native_office
+  alias: Backup budget for office
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_office_outlets_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_office_outlets_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_office
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_office'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: office
+- id: lab_span_backup_native_kitchen
+  alias: Backup budget for kitchen
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_kitchen_outlets_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_kitchen_outlets_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_kitchen
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_kitchen'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: kitchen
+- id: lab_span_backup_native_essentials
+  alias: Backup budget for essentials
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_essential_electronics_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_essential_electronics_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_essentials
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_essentials'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: essentials
+- id: lab_span_backup_native_laundry
+  alias: Backup budget for laundry
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_laundry_dryer_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_laundry_dryer_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_laundry
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_laundry'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: laundry
+- id: lab_span_backup_native_garage
+  alias: Backup budget for garage
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_garage_ev_charger_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_garage_ev_charger_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_garage
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_garage'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: garage
+- id: lab_span_backup_native_hvac
+  alias: Backup budget for hvac
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_central_hvac_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_central_hvac_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_hvac
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_hvac'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: hvac
+- id: lab_span_backup_native_water_heater
+  alias: Backup budget for water_heater
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: switch.span_panel_water_heater_breaker
+    to: 'off'
+    id: 'off'
+  - trigger: state
+    entity_id: switch.span_panel_water_heater_breaker
+    to: 'on'
+    id: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - choose:
+    - conditions: '{{ trigger.id == ''off'' }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.lab_span_backup_water_heater
+    - conditions: '{{ trigger.id == ''on'' and not is_state(''input_boolean.lab_span_backup_water_heater'',
+        ''on'') }}'
+      sequence:
+      - action: script.lab_span_backup_restore
+        data:
+          circuit: water_heater
+- id: lab_span_backup_begin
+  alias: Grid outage starts with all circuits off
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id: input_boolean.lab_span_grid_outage
+    from: 'off'
+    to: 'on'
+    id: begin
+  - trigger: homeassistant
+    event: start
+    id: restart
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id: &id001
+      - input_boolean.lab_span_backup_living_room
+      - input_boolean.lab_span_backup_office
+      - input_boolean.lab_span_backup_kitchen
+      - input_boolean.lab_span_backup_essentials
+      - input_boolean.lab_span_backup_laundry
+      - input_boolean.lab_span_backup_garage
+      - input_boolean.lab_span_backup_hvac
+      - input_boolean.lab_span_backup_water_heater
+  - action: switch.turn_off
+    target:
+      entity_id:
+      - switch.span_panel_living_room_breaker
+      - switch.span_panel_office_outlets_breaker
+      - switch.span_panel_kitchen_outlets_breaker
+      - switch.span_panel_essential_electronics_breaker
+      - switch.span_panel_laundry_dryer_breaker
+      - switch.span_panel_garage_ev_charger_breaker
+      - switch.span_panel_central_hvac_breaker
+      - switch.span_panel_water_heater_breaker
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_living_room
+      data:
+        value: '{{ states(''select.span_panel_living_room_circuit_priority'') }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_living_room_circuit_priority
+    data:
+      option: off_grid
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_office
+      data:
+        value: '{{ states(''select.span_panel_office_outlets_circuit_priority'') }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_office_outlets_circuit_priority
+    data:
+      option: off_grid
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_kitchen
+      data:
+        value: '{{ states(''select.span_panel_kitchen_outlets_circuit_priority'')
+          }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_kitchen_outlets_circuit_priority
+    data:
+      option: off_grid
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_essentials
+      data:
+        value: '{{ states(''select.span_panel_essential_electronics_circuit_priority'')
+          }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_essential_electronics_circuit_priority
+    data:
+      option: off_grid
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_laundry
+      data:
+        value: '{{ states(''select.span_panel_laundry_dryer_circuit_priority'') }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_laundry_dryer_circuit_priority
+    data:
+      option: off_grid
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_garage
+      data:
+        value: '{{ states(''select.span_panel_garage_ev_charger_circuit_priority'')
+          }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_garage_ev_charger_circuit_priority
+    data:
+      option: off_grid
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_hvac
+      data:
+        value: '{{ states(''select.span_panel_central_hvac_circuit_priority'') }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_central_hvac_circuit_priority
+    data:
+      option: off_grid
+  - if:
+    - condition: template
+      value_template: '{{ trigger.id == ''begin'' }}'
+    then:
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.lab_span_saved_priority_water_heater
+      data:
+        value: '{{ states(''select.span_panel_water_heater_circuit_priority'') }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_water_heater_circuit_priority
+    data:
+      option: off_grid
+  - action: homeassistant.save_persistent_states
+- id: lab_span_backup_empty
+  alias: Empty or disconnected battery stops backup loads
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.lab_span_backup_ready
+    from: 'on'
+    to: 'off'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.lab_span_grid_outage
+    state: 'on'
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id: *id001
+  - action: switch.turn_off
+    target:
+      entity_id:
+      - switch.span_panel_living_room_breaker
+      - switch.span_panel_office_outlets_breaker
+      - switch.span_panel_kitchen_outlets_breaker
+      - switch.span_panel_essential_electronics_breaker
+      - switch.span_panel_laundry_dryer_breaker
+      - switch.span_panel_garage_ev_charger_breaker
+      - switch.span_panel_central_hvac_breaker
+      - switch.span_panel_water_heater_breaker
+- id: lab_span_backup_end
+  alias: Grid restored keeps circuits off until manual restore
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id: input_boolean.lab_span_grid_outage
+    from: 'on'
+    to: 'off'
+  actions:
+  - action: switch.turn_off
+    target:
+      entity_id:
+      - switch.span_panel_living_room_breaker
+      - switch.span_panel_office_outlets_breaker
+      - switch.span_panel_kitchen_outlets_breaker
+      - switch.span_panel_essential_electronics_breaker
+      - switch.span_panel_laundry_dryer_breaker
+      - switch.span_panel_garage_ev_charger_breaker
+      - switch.span_panel_central_hvac_breaker
+      - switch.span_panel_water_heater_breaker
+  - action: input_boolean.turn_off
+    target:
+      entity_id: *id001
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_living_room_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_living_room'')
+        %}{{ p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid''
+        }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_office_outlets_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_office'') %}{{
+        p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid'' }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_kitchen_outlets_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_kitchen'') %}{{
+        p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid'' }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_essential_electronics_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_essentials'')
+        %}{{ p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid''
+        }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_laundry_dryer_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_laundry'') %}{{
+        p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid'' }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_garage_ev_charger_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_garage'') %}{{
+        p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid'' }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_central_hvac_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_hvac'') %}{{
+        p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid'' }}'
+  - action: select.select_option
+    target:
+      entity_id: select.span_panel_water_heater_circuit_priority
+    data:
+      option: '{% set p = states(''input_text.lab_span_saved_priority_water_heater'')
+        %}{{ p if p in [''never'',''off_grid'',''soc_threshold''] else ''off_grid''
+        }}'
+  - action: homeassistant.save_persistent_states
+script:
+  lab_span_restore_supply:
+    alias: Restore all circuit supplies (loads stay off)
+    sequence:
+    - condition: state
+      entity_id: input_boolean.lab_span_grid_outage
+      state: 'off'
+    - action: input_boolean.turn_off
+      target:
+        entity_id:
+        - input_boolean.lab_span_main_outage
+        - input_boolean.lab_span_living_room_fault
+        - input_boolean.lab_span_office_fault
+        - input_boolean.lab_span_kitchen_fault
+        - input_boolean.lab_span_essentials_fault
+        - input_boolean.lab_span_laundry_fault
+        - input_boolean.lab_span_garage_fault
+        - input_boolean.lab_span_hvac_fault
+        - input_boolean.lab_span_water_heater_fault
+    - delay:
+        seconds: 5
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_living_room_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_living_room_breaker
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_office_outlets_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_office_outlets_breaker
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_kitchen_outlets_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_kitchen_outlets_breaker
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_essential_electronics_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_essential_electronics_breaker
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_laundry_dryer_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_laundry_dryer_breaker
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_garage_ev_charger_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_garage_ev_charger_breaker
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_central_hvac_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_central_hvac_breaker
+    - if:
+      - condition: state
+        entity_id: switch.span_panel_water_heater_breaker
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.span_panel_water_heater_breaker
+  lab_span_backup_restore:
+    alias: Restore circuit within battery budget
+    mode: queued
+    max: 20
+    fields:
+      circuit:
+        required: true
+        selector:
+          select:
+            options:
+            - living_room
+            - office
+            - kitchen
+            - essentials
+            - laundry
+            - garage
+            - hvac
+            - water_heater
+    sequence:
+    - variables:
+        peaks:
+          living_room: 73
+          office: 1516
+          kitchen: 2553
+          essentials: 500
+          laundry: 5001
+          garage: 5760
+          hvac: 3008
+          water_heater: 4502
+        relays:
+          living_room: switch.span_panel_living_room_breaker
+          office: switch.span_panel_office_outlets_breaker
+          kitchen: switch.span_panel_kitchen_outlets_breaker
+          essentials: switch.span_panel_essential_electronics_breaker
+          laundry: switch.span_panel_laundry_dryer_breaker
+          garage: switch.span_panel_garage_ev_charger_breaker
+          hvac: switch.span_panel_central_hvac_breaker
+          water_heater: switch.span_panel_water_heater_breaker
+        priorities:
+          living_room: select.span_panel_living_room_circuit_priority
+          office: select.span_panel_office_outlets_circuit_priority
+          kitchen: select.span_panel_kitchen_outlets_circuit_priority
+          essentials: select.span_panel_essential_electronics_circuit_priority
+          laundry: select.span_panel_laundry_dryer_circuit_priority
+          garage: select.span_panel_garage_ev_charger_circuit_priority
+          hvac: select.span_panel_central_hvac_circuit_priority
+          water_heater: select.span_panel_water_heater_circuit_priority
+    - condition: template
+      value_template: '{{ circuit in peaks }}'
+    - if:
+      - condition: template
+        value_template: '{{ is_state(''input_boolean.lab_span_grid_outage'', ''on'')
+          }}'
+      then:
+      - if:
+        - condition: template
+          value_template: '{{ not is_state(''binary_sensor.lab_span_backup_ready'',
+            ''on'') or is_state(''input_boolean.lab_span_main_outage'', ''on'') or
+            not is_state(''input_boolean.lab_span_'' ~ circuit ~ ''_fault'', ''off'')
+            or (((73 if is_state(''input_boolean.lab_span_backup_living_room'', ''on'')
+            else 0) + (1516 if is_state(''input_boolean.lab_span_backup_office'',
+            ''on'') else 0) + (2553 if is_state(''input_boolean.lab_span_backup_kitchen'',
+            ''on'') else 0) + (500 if is_state(''input_boolean.lab_span_backup_essentials'',
+            ''on'') else 0) + (5001 if is_state(''input_boolean.lab_span_backup_laundry'',
+            ''on'') else 0) + (5760 if is_state(''input_boolean.lab_span_backup_garage'',
+            ''on'') else 0) + (3008 if is_state(''input_boolean.lab_span_backup_hvac'',
+            ''on'') else 0) + (4502 if is_state(''input_boolean.lab_span_backup_water_heater'',
+            ''on'') else 0)) + (0 if is_state(''input_boolean.lab_span_backup_'' ~
+            circuit, ''on'') else peaks[circuit])) > 10500 }}'
+        then:
+        - action: persistent_notification.create
+          data:
+            title: Battery circuit restore blocked
+            message: '{{ circuit ~ '': insufficient reserved capacity, battery unavailable,
+              or an active fault. Turn another circuit off and try again. Budget:
+              10,500 W; EV capped at 24 A.'' }}'
+            notification_id: lab_span_backup_budget
+        - action: switch.turn_off
+          target:
+            entity_id: '{{ relays[circuit] }}'
+        - stop: Backup capacity or supply unavailable
+      - action: input_boolean.turn_on
+        target:
+          entity_id: '{{ ''input_boolean.lab_span_backup_'' ~ circuit }}'
+      - action: select.select_option
+        target:
+          entity_id: '{{ priorities[circuit] }}'
+        data:
+          option: never
+    - action: switch.turn_on
+      target:
+        entity_id: '{{ relays[circuit] }}'
+    - delay:
+        seconds: 3
+    - if:
+      - condition: template
+        value_template: '{{ not is_state(relays[circuit], ''on'') }}'
+      then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: '{{ ''input_boolean.lab_span_backup_'' ~ circuit }}'
+      - action: persistent_notification.create
+        data:
+          title: Circuit did not restore
+          message: The panel did not confirm closure. Try Restore on battery again.
+          notification_id: lab_span_backup_budget
+  lab_span_backup_restore_living_room:
+    alias: Restore living room on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: living_room
+  lab_span_backup_restore_office:
+    alias: Restore office on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: office
+  lab_span_backup_restore_kitchen:
+    alias: Restore kitchen on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: kitchen
+  lab_span_backup_restore_essentials:
+    alias: Restore essentials on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: essentials
+  lab_span_backup_restore_laundry:
+    alias: Restore laundry on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: laundry
+  lab_span_backup_restore_garage:
+    alias: Restore garage on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: garage
+  lab_span_backup_restore_hvac:
+    alias: Restore hvac on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: hvac
+  lab_span_backup_restore_water_heater:
+    alias: Restore water heater on battery
+    sequence:
+    - action: script.lab_span_backup_restore
+      data:
+        circuit: water_heater
+input_text:
+  lab_span_saved_priority_living_room:
+    name: Before outage priority living_room
+    max: 40
+  lab_span_saved_priority_office:
+    name: Before outage priority office
+    max: 40
+  lab_span_saved_priority_kitchen:
+    name: Before outage priority kitchen
+    max: 40
+  lab_span_saved_priority_essentials:
+    name: Before outage priority essentials
+    max: 40
+  lab_span_saved_priority_laundry:
+    name: Before outage priority laundry
+    max: 40
+  lab_span_saved_priority_garage:
+    name: Before outage priority garage
+    max: 40
+  lab_span_saved_priority_hvac:
+    name: Before outage priority hvac
+    max: 40
+  lab_span_saved_priority_water_heater:
+    name: Before outage priority water_heater
+    max: 40

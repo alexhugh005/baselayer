@@ -1,0 +1,276 @@
+input_number:
+  base_layer_background_watts:
+    name: Always-on electronics (router, security, standby)
+    min: 50
+    max: 500
+    step: 10
+    initial: 180
+    unit_of_measurement: W
+  lab_elapsed_seconds:
+    name: Simulation elapsed time
+    min: 0
+    max: 4000000000
+    step: 0.01
+    mode: box
+    unit_of_measurement: s
+  lab_last_tick:
+    name: Simulation last tick
+    min: 0
+    max: 4000000000
+    step: 0.001
+    initial: 0
+    mode: box
+template:
+- sensor:
+  - name: Virtual Household Power
+    unique_id: base_layer_household_power
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    availability: '{{ is_number(states(''sensor.virtual_heater_power'')) and is_number(states(''sensor.virtual_dryer_power''))
+      and is_number(states(''sensor.virtual_desk_lamp_power'')) and is_number(states(''sensor.virtual_living_room_light_power''))
+      and is_number(states(''sensor.virtual_ceiling_fan_power'')) and is_number(states(''sensor.virtual_hvac_power''))
+      and is_number(states(''sensor.virtual_ev_charger_power'')) and is_number(states(''sensor.virtual_background_power''))
+      and is_number(states(''sensor.virtual_toaster_power'')) and is_number(states(''sensor.virtual_water_heater_power''))
+      and is_number(states(''sensor.virtual_dishwasher_power'')) }}'
+    state: '{{ (states(''sensor.virtual_heater_power'') | float(0) + states(''sensor.virtual_dryer_power'')
+      | float(0) + states(''sensor.virtual_desk_lamp_power'') | float(0) + states(''sensor.virtual_living_room_light_power'')
+      | float(0) + states(''sensor.virtual_ceiling_fan_power'') | float(0) + states(''sensor.virtual_hvac_power'')
+      | float(0) + states(''sensor.virtual_ev_charger_power'') | float(0) + states(''sensor.virtual_background_power'')
+      | float(0) + states(''sensor.virtual_toaster_power'') | float(0) + states(''sensor.virtual_water_heater_power'')
+      | float(0) + states(''sensor.virtual_dishwasher_power'') | float(0)) | round(2)
+      }}'
+    attributes:
+      model: Illustrative real-time household; not physical meter telemetry
+  - name: Virtual Refrigerator Power
+    unique_id: lab_fridge_power
+    state: '{% if not is_state(''binary_sensor.lab_span_kitchen_supply'', ''on'')
+      %}0{% else %}{{ (150 if (states(''input_number.lab_elapsed_seconds'') | float(0)
+      % 1800) < 600 else 3) if is_state(''input_boolean.lab_refrigerator_enabled'',
+      ''on'') else 0 }}{% endif %}'
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+  - name: Virtual Background Power
+    unique_id: lab_background_power
+    state: '{{ states(''sensor.virtual_electronics_power'') | float(0) + states(''sensor.virtual_refrigerator_power'')
+      | float(0) }}'
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+script:
+  base_layer_overload:
+    alias: 'Busy household: laundry and EV'
+    mode: single
+    sequence:
+    - action: script.base_layer_reset
+    - action: switch.turn_on
+      target:
+        entity_id:
+        - switch.virtual_dryer
+        - switch.virtual_ev_charger
+    - action: fan.set_percentage
+      target:
+        entity_id: fan.virtual_ceiling_fan
+      data:
+        percentage: 66
+  base_layer_reset:
+    alias: Reset realistic household
+    sequence:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lab_simulation_running
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.virtual_room_thermostat
+      data:
+        hvac_mode: 'off'
+    - action: climate.set_temperature
+      target:
+        entity_id: climate.virtual_room_thermostat
+      data:
+        temperature: 70
+    - action: script.lab_reset
+    - action: script.lab_kitchen_and_water_reset
+    - action: switch.turn_off
+      target:
+        entity_id: switch.virtual_ev_charger
+    - action: fan.turn_off
+      target:
+        entity_id: fan.virtual_ceiling_fan
+    - action: light.turn_on
+      target:
+        entity_id: light.virtual_living_room_light
+      data:
+        brightness: 180
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.base_layer_background_watts
+      data:
+        value: 180
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_room_temperature
+      data:
+        value: 68
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_outdoor_temperature
+      data:
+        value: 55
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.virtual_ev_current_limit
+      data:
+        value: 32
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_ev_soc
+      data:
+        value: 40
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_ev_target
+      data:
+        value: 80
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_ev_capacity
+      data:
+        value: 75
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_elapsed_seconds
+      data:
+        value: 0
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_fan_percentage
+      data:
+        value: 66
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.virtual_ev_plugged_in
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_last_tick
+      data:
+        value: '{{ as_timestamp(now()) }}'
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_simulation_running
+    - action: script.lab_dishwasher_reset
+  lab_simulation_tick:
+    alias: Advance household simulation
+    mode: single
+    sequence:
+    - variables:
+        dt: '{{ [30, [0, as_timestamp(now()) - states(''input_number.lab_last_tick'')
+          | float(0)] | max] | min }}'
+        dryer_seconds: '{{ states(''input_number.lab_dryer_elapsed'') | float(0) }}'
+        ev_watts: '{{ states(''sensor.virtual_ev_charger_power'') | float(0) }}'
+        room: '{{ states(''input_number.lab_room_temperature'') | float(68) }}'
+        outdoor: '{{ states(''input_number.lab_outdoor_temperature'') | float(55)
+          }}'
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_last_tick
+      data:
+        value: '{{ as_timestamp(now()) }}'
+    - condition: template
+      value_template: '{{ is_state(''input_boolean.lab_simulation_running'',''on'')
+        }}'
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_elapsed_seconds
+      data:
+        value: '{{ states(''input_number.lab_elapsed_seconds'') | float(0) + dt |
+          float(0) }}'
+    - action: script.lab_kitchen_and_water_tick
+      data:
+        seconds: '{{ dt }}'
+    - action: script.lab_dishwasher_tick
+      data:
+        seconds: '{{ dt }}'
+    - if:
+      - condition: template
+        value_template: '{{ is_state(''input_boolean.dryer_enabled'',''on'') }}'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.lab_dryer_elapsed
+        data:
+          value: '{{ [2700, dryer_seconds | float(0) + dt | float(0)] | min }}'
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_number.lab_dryer_elapsed'') | float(0)
+            >= 2700 }}'
+        then:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.dryer_enabled
+    - if:
+      - condition: template
+        value_template: '{{ is_state(''input_boolean.virtual_ev_plugged_in'',''on'')
+          and is_state(''input_boolean.virtual_ev_charging_enabled'',''on'') and ev_watts
+          | float(0) > 3 }}'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.lab_ev_soc
+        data:
+          value: '{{ [states(''input_number.lab_ev_target'') | float(80), states(''input_number.lab_ev_soc'')
+            | float(0) + (ev_watts | float(0) - 3) * 0.90 * (dt | float(0)) / (36000
+            * states(''input_number.lab_ev_capacity'') | float(75))] | min }}'
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.lab_room_temperature
+      data:
+        value: '{% set hvac = 9000 if states(''sensor.virtual_hvac_power'') | float(0)
+          >= 3000 else 0 %} {% set heater = states(''sensor.virtual_heater_power'')
+          | float(0) %} {% set net = hvac + heater + 250 - 180 * ((room | float(68)
+          - outdoor | float(55)) / 1.8) %} {{ [95, [50, room | float(68) + net * (dt
+          | float(0)) * 1.8 / 10800000] | max] | min }}'
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ not is_state(''input_boolean.heater_enabled'',''on'')
+            or states(''input_number.lab_room_temperature'') | float(68) >= states(''input_number.lab_heater_target'')
+            | float(70) + 0.5 }}'
+        sequence:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.lab_heater_demand
+      - conditions:
+        - condition: template
+          value_template: '{{ is_state(''input_boolean.heater_enabled'',''on'') and
+            states(''input_number.lab_room_temperature'') | float(68) <= states(''input_number.lab_heater_target'')
+            | float(70) - 0.5 }}'
+        sequence:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.lab_heater_demand
+input_boolean:
+  lab_simulation_running:
+    name: Run real-time simulation
+    initial: true
+automation:
+- id: lab_realtime_tick
+  alias: Real-time household physics
+  mode: single
+  triggers:
+  - trigger: time_pattern
+    seconds: /10
+  actions:
+  - action: script.lab_simulation_tick
+- id: lab_initialize_clock
+  alias: Initialize simulation clock after startup
+  triggers:
+  - trigger: homeassistant
+    event: start
+  actions:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.lab_last_tick
+    data:
+      value: '{{ as_timestamp(now()) }}'
