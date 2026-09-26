@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Xunit;
 namespace BaseLayer.Tests;
 
-public sealed class PlatformTests : IDisposable
+public sealed partial class PlatformTests : IDisposable
 {
     private readonly PlatformDbContext db;
     private readonly FakeProvider provider = new();
@@ -475,7 +475,10 @@ public sealed class PlatformTests : IDisposable
     private sealed class FakeProvider : ISmartHomeProvider
     {
         public ProviderSnapshot? Snapshot;
-        public bool Extra, Another, Off, Fail, FailRevoke; public int Exchanges, Sends, Revokes;
+        public int Reads, Refreshes, UnauthorizedReads;
+        public bool FailRefresh;
+        public ProviderTokens? LastReadTokens;
+        public bool Extra, Another, Off, Fail, FailRevoke, FailRead; public int Exchanges, Sends, Revokes, TurnOns;
         public TaskCompletionSource? SendStarted, ReleaseSend;
         public string ValidateOrigin(string s) => s; public string AuthorizationUrl(string o, string s) => o + "/auth?state=" + s;
         public Task<ProviderTokens> ExchangeAsync(string o, string c)
@@ -483,9 +486,22 @@ public sealed class PlatformTests : IDisposable
             Exchanges++;
             return Task.FromResult(new ProviderTokens("access", "refresh", DateTime.UtcNow.AddHours(1)));
         }
-        public Task<ProviderTokens> RefreshAsync(string o, ProviderTokens t) => Task.FromResult(t);
+        public Task<ProviderTokens> RefreshAsync(string o, ProviderTokens t)
+        {
+            Refreshes++;
+            if (FailRefresh) throw new HttpRequestException("Refresh rejected", null, System.Net.HttpStatusCode.BadRequest);
+            return Task.FromResult(t with { AccessToken = "renewed", ExpiresUtc = DateTime.UtcNow.AddHours(1) });
+        }
         public Task<ProviderSnapshot> ReadAsync(string o, ProviderTokens t)
         {
+            Reads++;
+            LastReadTokens = t;
+            if (UnauthorizedReads > 0)
+            {
+                UnauthorizedReads--;
+                throw new HttpRequestException("Token rejected", null, System.Net.HttpStatusCode.Unauthorized);
+            }
+            if (FailRead) throw new HttpRequestException();
             if (Snapshot is not null)
                 return Task.FromResult(Snapshot);
             List<ProviderDevice> devices = [new("switch.dryer", "Dryer", Off ? "off" : "on")];
@@ -503,6 +519,26 @@ public sealed class PlatformTests : IDisposable
                 await ReleaseSend.Task;
             if (Fail)
                 throw new HttpRequestException();
+        }
+        public List<(string EntityId, string Priority)> PrioritySends = [];
+        public Task SetCircuitPriorityAsync(string o, ProviderTokens t, string id, string priority)
+        {
+            PrioritySends.Add((id, priority));
+            if (Fail) throw new HttpRequestException();
+            return Task.CompletedTask;
+        }
+        public List<(string EntityId, double Amps)> CurrentSends = [];
+        public Task SetCurrentAsync(string o, ProviderTokens t, string id, double amps)
+        {
+            CurrentSends.Add((id, amps));
+            if (Fail) throw new HttpRequestException();
+            return Task.CompletedTask;
+        }
+        public Task TurnOnAsync(string o, ProviderTokens t, string id)
+        {
+            TurnOns++;
+            if (Fail) throw new HttpRequestException();
+            return Task.CompletedTask;
         }
         public Task RevokeAsync(string o, ProviderTokens t)
         {

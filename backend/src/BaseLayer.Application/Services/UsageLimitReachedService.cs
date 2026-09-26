@@ -17,7 +17,7 @@ public sealed class UsageLimitReachedService : IUsageLimitReachedService
         double reductionWatts = 0;
         // Taking the largest loads first minimizes the number of devices interrupted.
         foreach (var device in devices
-            .Where(d => d.Present && d.Allowed && !d.EntityId.StartsWith("climate.", StringComparison.Ordinal)
+            .Where(d => d.Present && d.Allowed && !SmartPanelCircuit.IsCircuit(d.EntityId) && d.ShutoffLevel != ShutoffLevels.Never && !d.EntityId.StartsWith("climate.", StringComparison.Ordinal)
                 && d.State is not ("off" or "unknown" or "unavailable")
                 && d.PowerWatts is { } watts && double.IsFinite(watts) && watts > 0)
             .OrderByDescending(d => d.PowerWatts)

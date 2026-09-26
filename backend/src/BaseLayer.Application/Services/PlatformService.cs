@@ -6,8 +6,9 @@ using BaseLayer.Application.Interfaces;
 using BaseLayer.Domain.Entities;
 namespace BaseLayer.Application.Services;
 
-public sealed class PlatformService(IPlatformRepository repository, ISmartHomeProvider provider, ICredentialProtector protector, TimeProvider clock, HomeOperationGate operations, IUsageLimitReachedService usageLimitReached) : IPlatformService
+public sealed partial class PlatformService(IPlatformRepository repository, ISmartHomeProvider provider, ICredentialProtector protector, TimeProvider clock, HomeOperationGate operations, IUsageLimitReachedService usageLimitReached) : IPlatformService
 {
+    private const double LimitWatts = SmartUsagePolicy.BatteryLimitWatts;
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     private static bool Fresh(Home home, DateTime now) => !home.Revoked && home.LastSeenUtc >= now.AddSeconds(-20);
@@ -21,20 +22,33 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
     private HomeDto ToDto(Home home)
     {
         var online = Fresh(home, Now);
-        const double limitWatts = 11000;
+        const double limitWatts = LimitWatts;
         var currentWatts = online ? home.HouseholdWatts : null;
-        var actions = currentWatts >= limitWatts
-            ? usageLimitReached.RecommendActions(currentWatts.Value, limitWatts, home.Devices)
+        var reducing = home.SmartPowerOffEnabled && currentWatts >= limitWatts &&
+            (home.Commands.Any(c => !CommandPolicy.Terminal(c)) || AutomaticActions(home).Count > 0);
+        var candidates = home.SmartPowerOffEnabled
+            ? home.Devices.Where(d => d.ShutoffLevel == ShutoffLevels.Sometimes)
+            : home.Devices;
+        var actions = !reducing && currentWatts >= limitWatts
+            ? usageLimitReached.RecommendActions(currentWatts.Value, limitWatts, candidates)
             : [];
+        var smartStatus = !home.SmartPowerOffEnabled ? "off"
+            : currentWatts is null || !double.IsFinite(currentWatts.Value) ? "unknown"
+            : currentWatts < limitWatts ? "monitoring"
+            : reducing ? "reducing"
+            : currentWatts - actions.Sum(a => a.PowerWatts) >= limitWatts ? "insufficient" : "review";
         var recommendations = actions.Select(action => action.EntityId).ToHashSet();
         var projected = currentWatts is { } watts
             ? (double?)Math.Max(0, watts - actions.Sum(action => action.PowerWatts))
             : null;
         return new(home.Id, home.Name, online, home.Revoked, home.LastSeenUtc, currentWatts, limitWatts, projected,
-            home.Devices.Where(d => d.Present).OrderBy(d => d.Name).Select(d => new DeviceDto(d.EntityId, d.Name, online ? d.State : "unavailable", online ? d.PowerWatts : null, d.Allowed, recommendations.Contains(d.EntityId), d.PowerSensorId, d.ThermostatMinF, d.ThermostatMaxF)).ToList(),
-            home.Commands.OrderByDescending(c => c.CreatedUtc).Take(30).Select(Dto).ToList(), home.BaseUrl, home.HouseholdPowerSensorId, home.AllowFutureDevices, Sensors(home), home.PowerSource);
+            home.Devices.Where(d => d.Present).OrderBy(d => d.Name).Select(d => new DeviceDto(d.EntityId, d.Name, online ? d.State : "unavailable", online ? d.PowerWatts : null, d.Allowed, recommendations.Contains(d.EntityId), d.PowerSensorId, d.ThermostatMinF, d.ThermostatMaxF, d.Allowed ? d.ShutoffLevel : ShutoffLevels.Never, SmartPanelCircuit.IsCircuit(d.EntityId), d.EvCurrentEntityId is { } currentId ? new(currentId, d.EvWattsPerAmp) : null, online ? EvControl(home, d) : null, CircuitPriority(home, d, online))).ToList(),
+            home.Commands.OrderByDescending(c => c.CreatedUtc).Take(30).Select(Dto).ToList(), home.BaseUrl, home.HouseholdPowerSensorId, home.AllowFutureDevices, Sensors(home), home.PowerSource, home.SmartPowerOffEnabled, smartStatus,
+            AutoRestorePolicy.Ordered(home.Devices.Where(d => d.RestoreQueuedUtc != null))
+                .Select(d => new RestoreQueueDto(d.EntityId, d.Name, AutoRestorePolicy.Estimate(home, d), d.RestoreQueuedUtc!.Value,
+                    d.SmartUsageHeld ? "held" : !home.SmartPowerOffEnabled ? "paused" : AutoRestorePolicy.Estimate(home, d) is null ? "unknown" : d.RestoreStatus, online ? EvControl(home, d)?.Amps : null, d.RestoreCurrentAmps)).ToList(), online ? CurrentControls(home) : []);
     }
-    private static CommandDto Dto(DeviceCommand c) => new(c.Id, c.EntityId, c.Status, c.Attempts, c.CreatedUtc, c.Message);
+    private static CommandDto Dto(DeviceCommand c) => new(c.Id, c.EntityId, c.Status, c.Attempts, c.CreatedUtc, c.Message, c.Automatic, c.Action, c.CurrentAmps, c.CircuitPriority, c.PreviousCurrentAmps, c.IsRestoration);
     public async Task<List<HomeDto>> HomesAsync(string owner) => (await repository.HomesAsync(owner)).Select(ToDto).ToList();
     public Task<OAuthStartResult> StartAsync(string owner, OAuthStartRequest request) => repository.TransactionAsync(async () =>
     {
@@ -97,14 +111,39 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
                     range.MinF < 10 || range.MaxF > 99 || range.MinF != Math.Truncate(range.MinF) ||
                     range.MaxF != Math.Truncate(range.MaxF) || range.MinF >= range.MaxF)
                     throw new ArgumentException("Choose a thermostat and two-digit whole temperatures with the minimum below the maximum (°F).");
+        if (request.ShutoffLevels is { } levels && levels.Any(kv =>
+            !devices.Contains(kv.Key) || kv.Value is not (ShutoffLevels.Never or ShutoffLevels.Sometimes or ShutoffLevels.Anytime) ||
+            (kv.Key.StartsWith("climate.") && kv.Value == ShutoffLevels.Anytime)))
+            throw new ArgumentException("Choose Never, Sometimes, or Anytime for each device. Thermostats cannot be shut off automatically.");
+        ValidateEvSettings(home, request);
+        if (request.SmartPowerOffEnabled is { } enabled) SetSmartPowerOff(home, enabled);
+        AutoRestorePolicy.ResetEligibility(home);
         home.AllowFutureDevices = request.AllowFutureDevices;
         home.PowerSource = request.PowerSource;
         home.HouseholdPowerSensorId = householdMeter;
         home.HouseholdWatts = null;
         foreach (var device in home.Devices)
         {
+            ApplyEvSettings(home, device, request);
             device.Allowed = device.Present && (request.AllowAll || request.AllowedEntityIds.Contains(device.EntityId));
-            device.PowerSensorId = request.DevicePowerSensors.GetValueOrDefault(device.EntityId);
+            if (request.ShutoffLevels?.TryGetValue(device.EntityId, out var level) == true)
+            {
+                device.ShutoffLevel = level;
+                device.Allowed = device.Present && level != ShutoffLevels.Never;
+            }
+            else if (!device.Allowed)
+                device.ShutoffLevel = ShutoffLevels.Never;
+            else if (device.ShutoffLevel == ShutoffLevels.Never)
+                device.ShutoffLevel = ShutoffLevels.Sometimes;
+            if (!device.Allowed || device.ShutoffLevel == ShutoffLevels.Never) AutoRestorePolicy.Clear(device);
+            var nextPowerSensor = request.DevicePowerSensors.GetValueOrDefault(device.EntityId);
+            if (device.PowerSensorId != nextPowerSensor)
+            {
+                device.PowerSensorRevision++;
+                device.LastOnWatts = null;
+                device.RestoreWatts = null;
+            }
+            device.PowerSensorId = nextPowerSensor;
             device.PowerWatts = null;
             if (request.ThermostatLimits?.TryGetValue(device.EntityId, out var range) == true)
             {
@@ -112,13 +151,109 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
                 device.ThermostatMaxF = range.MaxF;
             }
         }
-        foreach (var c in home.Commands.Where(c => !CommandPolicy.Terminal(c) && !home.Devices.Any(d => d.EntityId == c.EntityId && d.Allowed)))
+        foreach (var c in home.Commands.Where(c => !CommandPolicy.Terminal(c) && !c.ManualCircuit && !home.Devices.Any(d => d.EntityId == c.EntityId && d.Allowed && d.ShutoffLevel != ShutoffLevels.Never && (!c.Automatic || (home.SmartPowerOffEnabled && (c.Action == "On" || d.ShutoffLevel == ShutoffLevels.Anytime))))))
         {
             c.Status = "Cancelled";
             c.Message = "Device access removed.";
         }
         await repository.SaveAsync();
         return ToDto(home);
+    }));
+    public Task<HomeDto> SmartPowerOffAsync(string owner, Guid id, SmartPowerOffRequest request) => operations.RunAsync(id, () => repository.TransactionAsync(async () =>
+    {
+        var home = await Owned(owner, id);
+        if (home.Revoked)
+            throw new ArgumentException("Connection revoked.");
+        SetSmartPowerOff(home, request.Enabled);
+        await repository.SaveAsync();
+        return ToDto(home);
+    }));
+    private static void SetSmartPowerOff(Home home, bool enabled)
+    {
+        home.SmartPowerOffEnabled = enabled;
+        AutoRestorePolicy.ResetEligibility(home);
+        if (enabled) return;
+        foreach (var command in home.Commands.Where(c => c.Automatic && !CommandPolicy.Terminal(c)))
+        {
+            command.Status = "Cancelled";
+            command.Message = "Smart Shutoff disabled. Further attempts stopped; requests already sent cannot be undone.";
+        }
+        foreach (var device in home.Devices.Where(d => d.RestoreStatus == "restoring"))
+            device.RestoreStatus = "waiting";
+    }
+    public Task<HomeDto> KeepOffAsync(string owner, Guid id, string entityId) => operations.RunAsync(id, () => repository.TransactionAsync(async () =>
+    {
+        var home = await Owned(owner, id);
+        var device = home.Devices.SingleOrDefault(d => d.EntityId == entityId) ?? throw new KeyNotFoundException("Device not found.");
+        AutoRestorePolicy.Clear(device);
+        foreach (var command in home.Commands.Where(c => c.EntityId == entityId && (c.Action == "On" || c.IsRestoration) && !CommandPolicy.Terminal(c)))
+        {
+            command.Status = "Cancelled";
+            command.Message = "Removed from the restore queue. Requests already sent cannot be undone.";
+        }
+        await repository.SaveAsync();
+        return ToDto(home);
+    }));
+    private IReadOnlyList<TurnOffRecommendation> AutomaticActions(Home home)
+    {
+        if (!home.SmartPowerOffEnabled || home.HouseholdWatts is not { } watts || !double.IsFinite(watts))
+            return [];
+        var eventKey = $"smart:{home.SmartPowerOffEventId}";
+        var attempted = home.Commands.Where(c => c.Automatic && c.Action == "Off" && c.IdempotencyKey == eventKey).Select(c => c.EntityId).ToHashSet();
+        return usageLimitReached.RecommendActions(watts, LimitWatts,
+            home.Devices.Where(d => d.ShutoffLevel == ShutoffLevels.Anytime && !attempted.Contains(d.EntityId)));
+    }
+    private void QueueSmartPowerOff(Home home)
+    {
+        // Only a successful poll reaches here. Wait for all outstanding shutoffs
+        // before planning another batch from measured usage, never projected usage.
+        if (!home.SmartPowerOffEnabled || home.HouseholdWatts is not { } watts || !double.IsFinite(watts) || watts < LimitWatts
+            || home.Commands.Any(c => !CommandPolicy.Terminal(c)))
+            return;
+        home.SmartPowerOffEventId ??= Guid.NewGuid().ToString("N");
+        if (QueueEvReduction(home)) return;
+        foreach (var action in AutomaticActions(home))
+            home.Commands.Add(new DeviceCommand
+            {
+                HomeId = home.Id, EntityId = action.EntityId, RequestedBy = home.OwnerId,
+                IdempotencyKey = $"smart:{home.SmartPowerOffEventId}", Automatic = true,
+                CreatedUtc = Now, ExpiresUtc = Now.AddMinutes(2), NextAttemptUtc = Now,
+                Message = "Smart Power Off selected this Anytime device to reduce usage."
+            });
+    }
+    public Task<CommandDto> CircuitCommandAsync(string owner, Guid id, CircuitCommandRequest request) => operations.RunAsync(id, () => repository.TransactionAsync(async () =>
+    {
+        var home = await Owned(owner, id);
+        if (string.IsNullOrWhiteSpace(request.EntityId) || !SmartPanelCircuit.IsCircuit(request.EntityId) ||
+            request.Action is not ("On" or "Off") || string.IsNullOrWhiteSpace(request.IdempotencyKey) || request.IdempotencyKey.Length > 100)
+            throw new ArgumentException("Choose a panel circuit and an On or Off action.");
+        var prior = home.Commands.Where(c => c.IdempotencyKey == request.IdempotencyKey).ToList();
+        if (prior.Count > 0)
+        {
+            if (prior.Count != 1 || !prior[0].ManualCircuit || prior[0].EntityId != request.EntityId || prior[0].Action != request.Action)
+                throw new ArgumentException("Idempotency key was used for a different command.");
+            return Dto(prior[0]);
+        }
+        if (!Fresh(home, Now) || home.ProtectedTokens is null)
+            throw new ArgumentException("Home is offline. Reconnect before controlling circuits.");
+        var device = home.Devices.SingleOrDefault(d => d.EntityId == request.EntityId && d.Present);
+        if (device is null || device.State is not ("on" or "off"))
+            throw new ArgumentException("The circuit is unavailable. Wait for a fresh Home Assistant reading.");
+        foreach (var existing in home.Commands) CommandPolicy.Advance(existing, Now);
+        if (home.Commands.Any(c => c.EntityId == request.EntityId && !CommandPolicy.Terminal(c)))
+            throw new ArgumentException("A command is already pending for this circuit.");
+        // Manual panel control is independent of appliance automation permissions.
+        AutoRestorePolicy.Clear(device);
+        var command = new DeviceCommand
+        {
+            HomeId = id, EntityId = request.EntityId, Action = request.Action, ManualCircuit = true,
+            RequestedBy = owner, IdempotencyKey = request.IdempotencyKey, CreatedUtc = Now,
+            ExpiresUtc = Now.AddMinutes(2), NextAttemptUtc = Now,
+            Message = "Waiting for Home Assistant to confirm the circuit state."
+        };
+        home.Commands.Add(command);
+        await repository.SaveAsync();
+        return Dto(command);
     }));
     public Task<List<CommandDto>> TurnOffAsync(string owner, Guid id, TurnOffRequest request) => operations.RunAsync(id, () => repository.TransactionAsync(async () =>
     {
@@ -130,7 +265,7 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
         var prior = home.Commands.Where(c => c.IdempotencyKey == request.IdempotencyKey).ToList();
         if (prior.Count > 0)
         {
-            if (!prior.Select(c => c.EntityId).ToHashSet().SetEquals(request.EntityIds))
+            if (prior.Any(c => c.ManualCircuit || c.Action != "Off") || !prior.Select(c => c.EntityId).ToHashSet().SetEquals(request.EntityIds))
                 throw new ArgumentException("Idempotency key was used for different devices.");
             return prior.Select(Dto).ToList();
         }
@@ -138,7 +273,7 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             throw new ArgumentException("Home is offline. Reconnect before controlling devices.");
         var ids = request.EntityIds.Distinct().ToList();
         foreach (var entityId in ids)
-            if (!home.Devices.Any(d => d.EntityId == entityId && d.Allowed && Active(d)))
+            if (!home.Devices.Any(d => d.EntityId == entityId && d.Allowed && d.ShutoffLevel != ShutoffLevels.Never && Active(d)))
                 throw new ArgumentException("Selected devices must be active and allowed.");
         foreach (var command in home.Commands)
             CommandPolicy.Advance(command, Now);
@@ -159,6 +294,8 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             command.Message = "Future attempts cancelled by the user. Any command already sent cannot be undone.";
             command.LeaseUntilUtc = null;
             command.AttemptToken = null;
+            if ((command.Action == "On" || command.IsRestoration) && home.Devices.SingleOrDefault(d => d.EntityId == command.EntityId) is { } device)
+                AutoRestorePolicy.Clear(device);
             await repository.SaveAsync();
         }
         return Dto(command);
@@ -180,6 +317,8 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
     {
         home.LastSeenUtc = Now;
         home.SensorsJson = JsonSerializer.Serialize(snapshot.Sensors);
+        home.CurrentControlsJson = JsonSerializer.Serialize(snapshot.CurrentControls ?? []);
+        home.CircuitPrioritiesJson = JsonSerializer.Serialize(snapshot.CircuitPriorities ?? []);
         foreach (var device in home.Devices)
             device.Present = false;
         foreach (var reading in snapshot.Devices)
@@ -187,13 +326,17 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             var device = home.Devices.SingleOrDefault(d => d.EntityId == reading.EntityId);
             if (device is null)
             {
-                device = new Device { HomeId = home.Id, EntityId = reading.EntityId, Allowed = home.AllowFutureDevices };
+                device = new Device { HomeId = home.Id, EntityId = reading.EntityId, Allowed = home.AllowFutureDevices, ShutoffLevel = home.AllowFutureDevices ? ShutoffLevels.Sometimes : ShutoffLevels.Never };
                 home.Devices.Add(device);
             }
+            if (device.State == "off" && reading.State == "on") device.SmartUsageHeld = false;
             device.Name = reading.Name;
             device.State = reading.State;
             device.Present = true;
             device.PowerWatts = device.PowerSensorId is { } sensor ? snapshot.Power.GetValueOrDefault(sensor) : null;
+            if (device.State == "on" && SmartUsagePolicy.Positive(device.PowerWatts))
+                device.LastOnWatts = device.PowerWatts;
+            UpdateEvRestoreEstimate(home, device);
         }
         home.HouseholdWatts = home.PowerSource == HouseholdPowerSources.DeviceSum
             ? SumDevicePower(home, snapshot)
@@ -224,19 +367,35 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             CommandPolicy.Advance(command, Now);
         await repository.SaveAsync();
         var tokens = protector.Unprotect(home.ProtectedTokens);
-        if (tokens.ExpiresUtc <= Now.AddMinutes(1))
+        ProviderSnapshot snapshot;
+        try
+        {
+            if (tokens.ExpiresUtc <= Now.AddMinutes(1))
+                await RefreshTokensAsync();
+            try
+            {
+                snapshot = await provider.ReadAsync(home.BaseUrl, tokens);
+            }
+            catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                // A token may be rejected before its recorded expiry. Recover once;
+                // a rejected refresh or second read must reach the failure handler.
+                await RefreshTokensAsync();
+                snapshot = await provider.ReadAsync(home.BaseUrl, tokens);
+            }
+        }
+        catch { AutoRestorePolicy.ResetEligibility(home); foreach (var c in home.Commands) CommandPolicy.Advance(c, Now); await repository.SaveAsync(); throw; }
+        async Task RefreshTokensAsync()
         {
             tokens = await provider.RefreshAsync(home.BaseUrl, tokens);
             home.ProtectedTokens = protector.Protect(tokens);
             await repository.SaveAsync();
         }
-        ProviderSnapshot snapshot;
-        try
-        {
-            snapshot = await provider.ReadAsync(home.BaseUrl, tokens);
-        }
-        catch { foreach (var c in home.Commands) CommandPolicy.Advance(c, Now); await repository.SaveAsync(); throw; }
+        if (!Fresh(home, Now)) AutoRestorePolicy.ResetEligibility(home);
         ApplySnapshot(home, snapshot);
+        AutoRestorePolicy.QueueNext(home, Now, LimitWatts);
+        QueueSmartPowerOff(home);
+        var turnOnSentThisPoll = false;
         foreach (var command in home.Commands.Where(c => !CommandPolicy.Terminal(c)))
         {
             // Expiry is checked before observations: stale approvals never trigger another attempt.
@@ -245,43 +404,97 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             if (CommandPolicy.Terminal(command))
                 continue;
             var device = home.Devices.SingleOrDefault(d => d.EntityId == command.EntityId && d.Present);
-            if (device is null || !device.Allowed || device.EntityId.StartsWith("climate."))
+            if (device is null || (command.ManualCircuit
+                ? !SmartPanelCircuit.IsCircuit(device.EntityId)
+                : !device.Allowed || device.ShutoffLevel == ShutoffLevels.Never || device.EntityId.StartsWith("climate.") || SmartPanelCircuit.IsCircuit(device.EntityId))
+                || (command.Automatic && (!home.SmartPowerOffEnabled || (command.Action != "On" && device.ShutoffLevel != ShutoffLevels.Anytime))))
             {
                 command.Status = "Cancelled";
                 command.Message = "Device unavailable or access removed.";
                 continue;
             }
-            if (command.Attempts > 0 && device.State == "off")
+            if (command.Action == "SetCircuitPriority")
             {
-                command.Status = "Confirmed";
-                command.Message = "Home Assistant state confirms the device is off.";
+                await ProcessCircuitPriority(home, device, command, tokens);
+                continue;
+            }
+            if (command.Action == "SetCurrent")
+            {
+                await ProcessEvCommand(home, device, command, tokens);
+                continue;
+            }
+            var reachedState = command.Action == "On" ? Active(device) : device.State == "off";
+            if (command.Attempts > 0 && reachedState)
+            {
+                if (command.ManualCircuit)
+                {
+                    command.Status = "Confirmed";
+                    command.Message = $"Home Assistant confirmed circuit {command.Action.ToLowerInvariant()}.";
+                }
+                else AutoRestorePolicy.Confirm(home, device, command, Now);
+                continue;
+            }
+            if (!command.ManualCircuit && command.Action == "On" && !(command.UsageRevision is not null
+                ? SmartUsagePolicy.CanTurnOn(home, device, command)
+                : AutoRestorePolicy.Fits(home, device, LimitWatts)))
+            {
+                command.Status = "Cancelled";
+                command.Message = "Restoration paused: spare capacity or device state changed.";
+                device.RestoreStatus = "waiting";
+                device.RestoreEligibleSinceUtc = null;
+                continue;
+            }
+            if (command.Automatic && command.Action == "Off" && (home.HouseholdWatts is not { } current || !double.IsFinite(current) || current < LimitWatts))
+            {
+                command.Status = "Cancelled";
+                command.Message = "Automatic shutoff stopped: usage is below the limit or unavailable.";
                 continue;
             }
             CommandPolicy.Advance(command, Now);
             if (CommandPolicy.Terminal(command) || command.Status == "AwaitingConfirmation" || command.NextAttemptUtc > Now)
                 continue;
-            if (device.State == "off")
+            if (reachedState)
             {
                 command.Status = "Confirmed";
-                command.Message = "Device is already off.";
+                command.Message = "Device is already in the requested state.";
                 continue;
             }
-            if (!Active(device))
+            if ((command.ManualCircuit && device.State is not ("on" or "off")) || (command.Action == "Off" && !Active(device)))
             {
                 CommandPolicy.Retry(command, Now, "Device state is unavailable.");
                 continue;
             }
+            if (command.Action == "Off" && command.Attempts == 0)
+            {
+                command.EstimatedWatts = device.PowerWatts is { } power && double.IsFinite(power) && power > 0 ? power : null;
+                if (device.EvCurrentEntityId is not null)
+                    command.EstimatedWatts = EvRatedWatts(home, device) is { } rated ? Math.Max(command.EstimatedWatts ?? 0, rated) : null;
+            }
+            // Turn-ons are serialized across fresh polls; never spend the same headroom twice.
+            if (command.Action == "On" && (turnOnSentThisPoll || home.Commands.Any(c =>
+                c.Id != command.Id && c.Action == "On" && c.Attempts > 0 && !CommandPolicy.Terminal(c))))
+                continue;
             command.Attempts++;
             command.Status = "AwaitingConfirmation";
             command.LeaseUntilUtc = Now.AddSeconds(10);
             await repository.SaveAsync();
             try
             {
-                await provider.TurnOffAsync(home.BaseUrl, tokens, command.EntityId);
+                if (command.Action == "On")
+                {
+                    turnOnSentThisPoll = true;
+                    home.LastRestoreUtc = Now;
+                    await repository.SaveAsync();
+                    await provider.TurnOnAsync(home.BaseUrl, tokens, command.EntityId);
+                }
+                else
+                    await provider.TurnOffAsync(home.BaseUrl, tokens, command.EntityId);
             }
             catch (HttpRequestException) { CommandPolicy.Retry(command, Now, "Home Assistant rejected or could not receive the command."); }
             catch (TaskCanceledException) { CommandPolicy.Retry(command, Now, "Home Assistant command timed out."); }
         }
+        if (home.HouseholdWatts is { } measured && double.IsFinite(measured) && measured < LimitWatts)
+            home.SmartPowerOffEventId = null;
         await repository.SaveAsync();
     }
     public Task RevokeAsync(string owner, Guid id) => operations.RunAsync(id, () => RevokeCoreAsync(owner, id));

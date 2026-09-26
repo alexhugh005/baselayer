@@ -3,6 +3,9 @@ namespace BaseLayer.Domain.Entities;
 public sealed class Home
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTime? LastRestoreUtc { get; set; }
+    public bool SmartPowerOffEnabled { get; set; }
+    public string? SmartPowerOffEventId { get; set; }
     public string OwnerId { get; set; } = "";
     public string Name { get; set; } = "";
     public string BaseUrl { get; set; } = "";
@@ -19,6 +22,8 @@ public sealed class Home
     {
         get; set;
     }
+    public string CurrentControlsJson { get; set; } = "[]";
+    public string CircuitPrioritiesJson { get; set; } = "[]";
     public string SensorsJson { get; set; } = "[]";
     public DateTime? LastSeenUtc
     {
@@ -40,8 +45,28 @@ public static class HouseholdPowerSources
     public const string WholeHouseMeter = "wholeHouseMeter";
     public const string DeviceSum = "deviceSum";
 }
+public static class ShutoffLevels
+{
+    public const string Never = "Never";
+    public const string Sometimes = "Sometimes";
+    public const string Anytime = "Anytime";
+}
 public sealed class Device
 {
+    public string? EvCurrentEntityId { get; set; }
+    public double EvWattsPerAmp { get; set; } = 240;
+    public int PowerSensorRevision { get; set; }
+    public double? LastOnWatts { get; set; }
+    public bool SmartUsageHeld { get; set; }
+    public double? RestoreWatts { get; set; }
+    public double? RestoreCurrentAmps { get; set; }
+    public double? LastManagedCurrentAmps { get; set; }
+    public bool RestoreAtFront { get; set; }
+    public bool RestorePowerOn { get; set; }
+    public DateTime? RestoreQueuedUtc { get; set; }
+    public DateTime? RestoreEligibleSinceUtc { get; set; }
+    public string RestoreStatus { get; set; } = "waiting";
+    public string ShutoffLevel { get; set; } = ShutoffLevels.Sometimes;
     public double ThermostatMinF { get; set; } = 66;
     public double ThermostatMaxF { get; set; } = 80;
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -87,6 +112,18 @@ public sealed class OAuthState
 }
 public sealed class DeviceCommand
 {
+    public string? PriorityControlEntityId { get; set; }
+    public string? CircuitPriority { get; set; }
+    public string? CurrentControlEntityId { get; set; }
+    public double? CurrentAmps { get; set; }
+    public double? PreviousCurrentAmps { get; set; }
+    public bool IsRestoration { get; set; }
+    public bool ManualCircuit { get; set; }
+    public double? UsageBudgetWatts { get; set; }
+    public string? UsageRevision { get; set; }
+    public string Action { get; set; } = "Off";
+    public double? EstimatedWatts { get; set; }
+    public bool Automatic { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid HomeId
     {

@@ -14,21 +14,95 @@ public static class DatabaseInitializer
         await using var command = db.Database.GetDbConnection().CreateCommand();
         command.Transaction = transaction.GetDbTransaction();
         command.CommandText = "PRAGMA table_info('Homes')";
-        var hasPowerSource = false;
+        var homeColumns = new HashSet<string>();
         await using (var reader = await command.ExecuteReaderAsync())
             while (await reader.ReadAsync())
-                hasPowerSource |= reader.GetString(1) == "PowerSource";
-        if (!hasPowerSource)
+                homeColumns.Add(reader.GetString(1));
+        if (!homeColumns.Contains("CurrentControlsJson"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN CurrentControlsJson TEXT NOT NULL DEFAULT '[]'");
+        if (!homeColumns.Contains("CircuitPrioritiesJson"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN CircuitPrioritiesJson TEXT NOT NULL DEFAULT '[]'");
+        if (!homeColumns.Contains("SmartPowerOffEnabled"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN SmartPowerOffEnabled INTEGER NOT NULL DEFAULT 0");
+        if (!homeColumns.Contains("SmartPowerOffEventId"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN SmartPowerOffEventId TEXT NULL");
+        if (!homeColumns.Contains("LastRestoreUtc"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN LastRestoreUtc TEXT NULL");
+        if (!homeColumns.Contains("PowerSource"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN PowerSource TEXT NOT NULL DEFAULT 'wholeHouseMeter'");
         command.CommandText = "PRAGMA table_info('Device')";
         var columns = new HashSet<string>();
         await using (var reader = await command.ExecuteReaderAsync())
             while (await reader.ReadAsync())
                 columns.Add(reader.GetString(1));
+        if (!columns.Contains("RestorePowerOn"))
+        {
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestorePowerOn INTEGER NOT NULL DEFAULT 0");
+            if (columns.Contains("RestoreQueuedUtc"))
+                await db.Database.ExecuteSqlRawAsync("UPDATE Device SET RestorePowerOn = 1 WHERE RestoreQueuedUtc IS NOT NULL");
+        }
+        if (!columns.Contains("RestoreCurrentAmps"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreCurrentAmps REAL NULL");
+        if (!columns.Contains("LastManagedCurrentAmps"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN LastManagedCurrentAmps REAL NULL");
+        if (!columns.Contains("RestoreAtFront"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreAtFront INTEGER NOT NULL DEFAULT 0");
+        if (!columns.Contains("EvCurrentEntityId"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN EvCurrentEntityId TEXT NULL");
+        if (!columns.Contains("EvWattsPerAmp"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN EvWattsPerAmp REAL NOT NULL DEFAULT 240");
+        if (!columns.Contains("PowerSensorRevision"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN PowerSensorRevision INTEGER NOT NULL DEFAULT 0");
+        if (!columns.Contains("LastOnWatts"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN LastOnWatts REAL NULL");
+        if (!columns.Contains("SmartUsageHeld"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN SmartUsageHeld INTEGER NOT NULL DEFAULT 0");
         if (!columns.Contains("ThermostatMinF"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN ThermostatMinF REAL NOT NULL DEFAULT 66");
         if (!columns.Contains("ThermostatMaxF"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN ThermostatMaxF REAL NOT NULL DEFAULT 80");
+        if (!columns.Contains("ShutoffLevel"))
+        {
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN ShutoffLevel TEXT NOT NULL DEFAULT 'Sometimes'");
+            await db.Database.ExecuteSqlRawAsync("UPDATE Device SET ShutoffLevel = 'Never' WHERE Allowed = 0");
+        }
+        if (!columns.Contains("RestoreWatts"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreWatts REAL NULL");
+        if (!columns.Contains("RestoreQueuedUtc"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreQueuedUtc TEXT NULL");
+        if (!columns.Contains("RestoreEligibleSinceUtc"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreEligibleSinceUtc TEXT NULL");
+        if (!columns.Contains("RestoreStatus"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreStatus TEXT NOT NULL DEFAULT 'waiting'");
+        command.CommandText = "PRAGMA table_info('DeviceCommand')";
+        var commandColumns = new HashSet<string>();
+        await using (var reader = await command.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                commandColumns.Add(reader.GetString(1));
+        if (!commandColumns.Contains("PreviousCurrentAmps"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN PreviousCurrentAmps REAL NULL");
+        if (!commandColumns.Contains("IsRestoration"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN IsRestoration INTEGER NOT NULL DEFAULT 0");
+        if (!commandColumns.Contains("CurrentControlEntityId"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN CurrentControlEntityId TEXT NULL");
+        if (!commandColumns.Contains("PriorityControlEntityId"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN PriorityControlEntityId TEXT NULL");
+        if (!commandColumns.Contains("CircuitPriority"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN CircuitPriority TEXT NULL");
+        if (!commandColumns.Contains("CurrentAmps"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN CurrentAmps REAL NULL");
+        if (!commandColumns.Contains("ManualCircuit"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN ManualCircuit INTEGER NOT NULL DEFAULT 0");
+        if (!commandColumns.Contains("UsageBudgetWatts"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN UsageBudgetWatts REAL NULL");
+        if (!commandColumns.Contains("UsageRevision"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN UsageRevision TEXT NULL");
+        if (!commandColumns.Contains("Action"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN Action TEXT NOT NULL DEFAULT 'Off'");
+        if (!commandColumns.Contains("EstimatedWatts"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN EstimatedWatts REAL NULL");
+        if (!commandColumns.Contains("Automatic"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand ADD COLUMN Automatic INTEGER NOT NULL DEFAULT 0");
         await transaction.CommitAsync();
     }
 }

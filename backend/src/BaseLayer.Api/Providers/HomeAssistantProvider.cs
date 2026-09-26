@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using BaseLayer.Application.Contracts;
 using BaseLayer.Application.Interfaces;
+using BaseLayer.Domain.Entities;
 using Microsoft.AspNetCore.DataProtection;
 namespace BaseLayer.Api.Providers;
 
@@ -54,12 +55,33 @@ public sealed class HomeAssistantProvider(HttpClient http, IConfiguration config
         var devices = new List<ProviderDevice>();
         var sensors = new List<PowerSensorDto>();
         var power = new Dictionary<string, double?>();
+        var controls = new List<CurrentControlDto>();
+        var priorities = new List<CircuitPriorityDto>();
         foreach (var e in document.RootElement.EnumerateArray())
         {
             var id = e.GetProperty("entity_id").GetString()!;
             var state = e.GetProperty("state").GetString()!;
             var attrs = e.GetProperty("attributes");
             var name = attrs.TryGetProperty("friendly_name", out var n) ? n.GetString() ?? id : id;
+            if (SmartPanelCircuit.IsPriorityControl(id) && attrs.TryGetProperty("options", out var options) && options.ValueKind == JsonValueKind.Array)
+            {
+                var supported = options.EnumerateArray()
+                    .Where(o => o.ValueKind == JsonValueKind.String)
+                    .Select(o => o.GetString()!).Where(SmartPanelCircuit.ValidPriority).Distinct().ToList();
+                priorities.Add(new(id, supported.Contains(state) ? state : null, supported));
+            }
+            if ((id.StartsWith("number.") || id.StartsWith("input_number.")) &&
+                attrs.TryGetProperty("unit_of_measurement", out var currentUnit) && currentUnit.GetString() == "A" &&
+                attrs.TryGetProperty("min", out var min) && min.TryGetDouble(out var minimum) &&
+                attrs.TryGetProperty("max", out var max) && max.TryGetDouble(out var maximum) &&
+                attrs.TryGetProperty("step", out var step) && step.TryGetDouble(out var increment) &&
+                double.IsFinite(minimum) && minimum >= 0 && double.IsFinite(maximum) && maximum > minimum &&
+                double.IsFinite(increment) && increment > 0)
+            {
+                double? amps = double.TryParse(state, NumberStyles.Float, CultureInfo.InvariantCulture, out var a) &&
+                    double.IsFinite(a) && a >= minimum && a <= maximum ? a : null;
+                controls.Add(new(id, name, amps, minimum, maximum, increment));
+            }
             if (new[] { "switch", "light", "fan", "climate" }.Contains(id.Split('.')[0]))
                 devices.Add(new(id, name, state));
             if (!id.StartsWith("sensor.") || !attrs.TryGetProperty("device_class", out var dc) || dc.GetString() != "power" || !attrs.TryGetProperty("unit_of_measurement", out var unit))
@@ -72,13 +94,27 @@ public sealed class HomeAssistantProvider(HttpClient http, IConfiguration config
             var watts = value * (u == "kW" ? 1000 : 1);
             power[id] = parsed && double.IsFinite(watts) && watts >= 0 ? watts : null;
         }
-        return new(devices, sensors, power);
+        return new(devices, sensors, power, controls, priorities);
     }
-    public async Task TurnOffAsync(string origin, ProviderTokens tokens, string entityId)
+    public async Task SetCircuitPriorityAsync(string origin, ProviderTokens tokens, string entityId, string priority)
+    {
+        if (!SmartPanelCircuit.IsPriorityControl(entityId) || !SmartPanelCircuit.ValidPriority(priority))
+            throw new ArgumentException("Unsupported circuit outage setting.");
+        using var result = await ApiAsync(origin, tokens, HttpMethod.Post, "/api/services/select/select_option", new { entity_id = entityId, option = priority });
+    }
+    public async Task SetCurrentAsync(string origin, ProviderTokens tokens, string entityId, double amps)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(entityId, @"^(number|input_number)\.[a-z0-9_]+$") || !double.IsFinite(amps) || amps < 0)
+            throw new ArgumentException("Unsupported charging current control.");
+        using var result = await ApiAsync(origin, tokens, HttpMethod.Post, $"/api/services/{entityId.Split('.')[0]}/set_value", new { entity_id = entityId, value = amps });
+    }
+    public Task TurnOffAsync(string origin, ProviderTokens tokens, string entityId) => SetPowerAsync(origin, tokens, entityId, "turn_off");
+    public Task TurnOnAsync(string origin, ProviderTokens tokens, string entityId) => SetPowerAsync(origin, tokens, entityId, "turn_on");
+    private async Task SetPowerAsync(string origin, ProviderTokens tokens, string entityId, string action)
     {
         if (!System.Text.RegularExpressions.Regex.IsMatch(entityId, @"^(switch|light|fan|climate)\.[a-z0-9_]+$"))
             throw new ArgumentException("Unsupported device.");
-        using var result = await ApiAsync(origin, tokens, HttpMethod.Post, $"/api/services/{entityId.Split('.')[0]}/turn_off", new
+        using var result = await ApiAsync(origin, tokens, HttpMethod.Post, $"/api/services/{entityId.Split('.')[0]}/{action}", new
         {
             entity_id = entityId
         });

@@ -12,7 +12,7 @@ public static class CommandPolicy
         if (now >= c.ExpiresUtc)
         {
             c.Status = "Expired";
-            c.Message = "Approval expired before confirmed shutoff.";
+            c.Message = "Command expired before the requested state was confirmed.";
             return;
         }
         if (c.Status == "AwaitingConfirmation" && c.LeaseUntilUtc <= now)
