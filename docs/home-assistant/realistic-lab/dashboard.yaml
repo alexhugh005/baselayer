@@ -191,38 +191,52 @@ views:
   path: panel
   icon: mdi:electric-switch
   cards:
-  - type: markdown
-    content: '# Battery backup outage
-
-      1. Turn on **Grid outage · battery backup**. All circuits start off.
-
-      2. Use **Restore on battery** on the circuits you want; then start their appliances.
-
-      3. Turn a **SPAN breaker** off to free its reserved capacity.
-
-      4. Turn the grid outage off, wait 5 seconds, then run **Restore all circuit
-      supplies** and **Reset realistic household**.
-
-
-      The simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Restores
-      reserve the circuit’s maximum modeled load within **10.5 kW**, leaving 500 W
-      headroom. EV charging is capped at **24 A / 5.76 kW** on backup. A blocked restore
-      appears in Notifications. The old whole-house fault cuts all power, including
-      backup; leave it off.'
   - type: entities
     title: Battery backup controls
     show_header_toggle: false
     entities:
     - input_boolean.lab_span_grid_outage
-    - binary_sensor.lab_span_backup_ready
-    - sensor.lab_span_battery_charge
-    - sensor.lab_span_battery_energy
-    - sensor.lab_span_battery_power
-    - sensor.lab_span_grid_power
-    - sensor.virtual_household_power
-    - sensor.lab_span_backup_reserved_power
-    - sensor.lab_span_backup_available_power
-    - sensor.lab_span_effective_ev_current
+    - entity: binary_sensor.lab_span_backup_ready
+      name: Backup ready
+    - entity: sensor.lab_span_battery_charge
+      name: Battery charge
+    - entity: sensor.lab_span_battery_energy
+      name: Stored battery energy
+    - entity: sensor.lab_span_battery_power
+      name: Battery output
+    - entity: sensor.lab_span_grid_power
+      name: Grid import
+    - entity: sensor.virtual_household_power
+      name: Household load
+    - entity: sensor.lab_span_backup_reserved_power
+      name: Measured backup load
+    - entity: sensor.lab_span_backup_available_power
+      name: Remaining backup budget
+    - entity: sensor.lab_span_effective_ev_current
+      name: Effective EV charging current
+  - type: markdown
+    content: '# Battery backup outage
+
+      1. Turn on **Grid outage · battery backup**. All circuits start off. Wait for
+      **Backup ready: On**.
+
+      2. Click **Run** beside **Restore** on the circuits you want; then start their
+      appliances.
+
+      3. After each restore, wait five seconds for load to settle. Idle circuits leave
+      capacity for more restores.
+
+      4. Turn the grid outage off and wait for grid recovery. Existing breaker positions
+      are kept. Use **Restore all circuit supplies** if you want every breaker on,
+      and **Reset realistic household** to reset appliances.
+
+
+      The simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Each restore
+      checks measured load plus the next circuit’s estimate against **11 kW**. After
+      the cooldown, only actual usage counts. Later appliance starts can still trigger
+      the measured-overload disconnect. EV charging is capped at **24 A / 5.76 kW**
+      on backup. A blocked restore appears in Notifications. The old whole-house fault
+      cuts all power, including backup; leave it off.'
   - type: markdown
     content: '# Virtual SPAN smart panel
 
@@ -240,8 +254,8 @@ views:
     entities:
     - binary_sensor.lab_span_bridge_connected
     - sensor.virtual_household_power
-    - entity: sensor.span_panel_current_power
-      name: SPAN metered total
+    - entity: sensor.span_panel_site_power
+      name: SPAN household load
     - input_boolean.lab_span_main_outage
     - script.lab_span_restore_supply
   - type: button
@@ -255,7 +269,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_living_room
-      name: Restore on battery · reserves 73 W
+      name: Restore · 73 W
     - entity: input_boolean.lab_span_living_room_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_living_room_breaker
@@ -271,7 +285,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_office
-      name: Restore on battery · reserves 1,516 W
+      name: Restore · 1,516 W
     - entity: input_boolean.lab_span_office_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_office_outlets_breaker
@@ -287,7 +301,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_kitchen
-      name: Restore on battery · reserves 2,553 W
+      name: Restore · 2,553 W
     - entity: input_boolean.lab_span_kitchen_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_kitchen_outlets_breaker
@@ -304,7 +318,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_essentials
-      name: Restore on battery · reserves 500 W
+      name: Restore · 500 W
     - entity: input_boolean.lab_span_essentials_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_essential_electronics_breaker
@@ -318,7 +332,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_laundry
-      name: Restore on battery · reserves 5,001 W
+      name: Restore · 5,001 W
     - entity: input_boolean.lab_span_laundry_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_laundry_dryer_breaker
@@ -333,7 +347,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_garage
-      name: Restore on battery · reserves 5,760 W
+      name: Restore · 5,760 W
     - entity: input_boolean.lab_span_garage_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_garage_ev_charger_breaker
@@ -348,7 +362,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_hvac
-      name: Restore on battery · reserves 3,008 W
+      name: Restore · 3,008 W
     - entity: input_boolean.lab_span_hvac_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_central_hvac_breaker
@@ -363,7 +377,7 @@ views:
     show_header_toggle: false
     entities:
     - entity: script.lab_span_backup_restore_water_heater
-      name: Restore on battery · reserves 4,502 W
+      name: Restore · 4,502 W
     - entity: input_boolean.lab_span_water_heater_fault
       name: Area fault · on cuts power
     - entity: switch.span_panel_water_heater_breaker

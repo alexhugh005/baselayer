@@ -4,10 +4,48 @@ A React + .NET platform for monitoring home energy and approving device shutoffs
 Clerk handles user sign-in. Home Assistant connects through its native OAuth and
 REST APIs—no custom plugin is required.
 
-## Start locally
+## Start Home Assistant
 
-Prerequisites: .NET 10 SDK, Node 24 LTS, npm, and a reachable Home Assistant instance.
-Connect to an existing Home Assistant instance; the former plugin and virtual-house fixture have been removed from this repository.
+Install Git and Docker with Compose v2 (Docker Desktop includes Compose), then
+start Docker. Internet access is required for the first build.
+
+```sh
+git clone https://github.com/sftwre/baselayer.git
+cd baselayer
+docker compose -f compose.energy-lab.yaml up --build -d --wait --wait-timeout 300
+```
+
+If you already cloned the repository, run the Compose command from its root.
+Allow several minutes for the first build. It starts Home Assistant and PanelBench,
+loads the virtual household devices and dashboards, and automatically configures
+the SPAN connection and private bridge credentials.
+
+Open [http://localhost:8123](http://localhost:8123) on the Docker host, or
+`http://<host-LAN-IP>:8123` from another device on the same network. Create your own
+Home Assistant account, then choose **Energy Lab** in the sidebar. No backup upload
+or manual token copying is required. Allow inbound TCP 8123 through the host
+firewall if needed; keep Docker running and the host awake.
+
+If port 8123 is already in use, create a `.env` file in the repository root containing
+`LAB_HA_PORT=18123` before starting, then open port 18123 instead. Additional port
+overrides and troubleshooting are in the [portable Energy Lab guide](docs/home-assistant/portable/README.md).
+
+Check status or stop the lab while preserving its accounts and data:
+
+```sh
+docker compose -f compose.energy-lab.yaml ps
+docker compose -f compose.energy-lab.yaml down
+```
+
+Run the startup command again to resume. Named volumes preserve the installation;
+adding `--volumes` to `down` would erase it. A shareable standalone ZIP is available
+at [artifacts/energy-lab/energy-lab-compose.zip](artifacts/energy-lab/energy-lab-compose.zip).
+
+## Start Base Layer locally
+
+Prerequisites: .NET 10 SDK, Node 24 LTS, npm, and a reachable Home Assistant instance
+(either the lab above or your existing installation). The Compose setup above
+starts Home Assistant and PanelBench; start the Base Layer frontend/API separately:
 
 ```sh
 npm --prefix frontend ci

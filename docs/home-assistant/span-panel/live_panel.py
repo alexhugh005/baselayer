@@ -84,6 +84,7 @@ class LiveLabApp(SimulatorApp):
     def __init__(self, source, **kwargs):
         self.source = source
         self.mqtt_generations = {}
+        self.heartbeat_at = {}
         super().__init__(**kwargs)
 
     async def _load_recorder_data(self, config_path):
@@ -148,6 +149,18 @@ class LiveLabApp(SimulatorApp):
                         await runtime.transport.drain()
                         if mqtt.is_connected() and mqtt.generation == generation:
                             self.mqtt_generations[panel.serial_number] = generation
+                    # Diff-only telemetry is silent when every circuit is off.
+                    # Exercise the same queue and acknowledged broker publish path
+                    # so idle meters do not falsely fail the five-second health check.
+                    # This lab-owned topic is outside the emitter's eBus namespace.
+                    if time.monotonic() - self.heartbeat_at.get(panel.serial_number, 0) >= 2:
+                        self.heartbeat_at[panel.serial_number] = time.monotonic()
+                        runtime.transport.publish('energy-lab/bridge/heartbeat',
+                                                  str(time.time()), qos=1, retain=False)
+                        try:
+                            await asyncio.wait_for(runtime.transport.drain(), timeout=2)
+                        except asyncio.TimeoutError:
+                            logging.warning('Panel MQTT heartbeat queue did not drain')
                 snapshot = runtime.emitter.last_snapshot if runtime else None
                 if snapshot and panel.engine:
                     panel.engine.set_dynamic_overrides(circuit_overrides={

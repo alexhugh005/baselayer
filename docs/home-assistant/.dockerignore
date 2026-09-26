@@ -1,0 +1,15 @@
+*
+!portable/
+!portable/**
+!realistic-lab/
+!realistic-lab/packages/
+!realistic-lab/packages/*.yaml
+!realistic-lab/dashboard.yaml
+!span-panel/
+!span-panel/entrypoint.sh
+!span-panel/live_panel.py
+!span-panel/mqtt_receiver.py
+!span-panel/circuits.json
+!span-panel/relays.json
+!span-panel/energy-lab.yaml
+**/__pycache__/

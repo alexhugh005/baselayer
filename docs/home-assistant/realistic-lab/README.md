@@ -70,6 +70,11 @@ resetting the scenario does not erase those counters.
 
 ## Install and verify
 
+For a new user's machine, use the [portable Compose installer](../portable/README.md).
+It starts Home Assistant and PanelBench together, provisions their connection,
+and loads these packages automatically. The user creates their own HA account;
+the old personal backup is not needed.
+
 Back up the existing configuration first. Install all package files, replacing same-named files in
 the Home Assistant `packages` directory with this directory's `packages/*.yaml`.
 Do not load old and new versions simultaneously. Include packages using

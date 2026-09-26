@@ -1,0 +1,57 @@
+name: basehack-energy-lab-portable
+
+services:
+  homeassistant:
+    build:
+      context: ./docs/home-assistant
+      dockerfile: portable/HomeAssistant.Dockerfile
+    restart: unless-stopped
+    stop_grace_period: 60s
+    ports:
+      - "${LAB_BIND_ADDRESS:-0.0.0.0}:${LAB_HA_PORT:-8123}:8123"
+    volumes:
+      - homeassistant:/config
+      - bridge-credentials:/run/lab-credentials
+    networks:
+      default:
+        aliases: [basehack-homeassistant]
+    healthcheck:
+      test: [CMD, python3, -c, "import pathlib,urllib.request; urllib.request.urlopen('http://127.0.0.1:8123/',timeout=5); assert pathlib.Path('/config/.energy-lab-ready').exists()"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+  panelbench:
+    build:
+      context: ./docs/home-assistant
+      dockerfile: portable/PanelBench.Dockerfile
+    hostname: basehack-panelbench
+    restart: unless-stopped
+    depends_on:
+      homeassistant:
+        condition: service_started
+    environment:
+      HA_URL: http://basehack-homeassistant:8123
+    volumes:
+      - panel-config:/app/configs
+      - panel-certs:/app/certs
+      - bridge-credentials:/run/secrets:ro
+    networks:
+      default:
+        aliases: [basehack-panelbench]
+    ports:
+      - "127.0.0.1:${LAB_PANEL_PORT:-18080}:18080"
+      - "127.0.0.1:${LAB_HEALTH_PORT:-18081}:18081"
+    healthcheck:
+      test: [CMD, python, -c, "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:18081/health',timeout=5))['connected']"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+volumes:
+  homeassistant:
+  panel-config:
+  panel-certs:
+  bridge-credentials:

@@ -1,0 +1,29 @@
+homeassistant:
+  name: Energy Lab
+  latitude: 0
+  longitude: 0
+  elevation: 0
+  unit_system: us_customary
+  time_zone: America/Chicago
+  packages: !include_dir_named packages
+# Local virtual devices only; no automatic discovery of household hardware.
+frontend:
+history:
+logbook:
+recorder:
+  purge_keep_days: 7
+config:
+energy:
+my:
+api:
+http:
+energy_lab_bootstrap:
+lovelace:
+  mode: yaml
+  dashboards:
+    energy-lab:
+      mode: yaml
+      title: Energy Lab
+      icon: mdi:lightning-bolt
+      show_in_sidebar: true
+      filename: energy-lab.yaml

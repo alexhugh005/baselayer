@@ -1,0 +1,8 @@
+{
+  "domain": "energy_lab_bootstrap",
+  "name": "Energy Lab bootstrap",
+  "version": "1.0.0",
+  "codeowners": [],
+  "dependencies": ["api"],
+  "iot_class": "local_push"
+}
