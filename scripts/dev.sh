@@ -7,7 +7,7 @@ if [ ! -f "$ROOT/frontend/.env.local" ] || [ ! -f "$ROOT/backend/src/BaseLayer.A
 fi
 cleanup() { kill "${API_PID:-}" "${WEB_PID:-}" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
-(cd "$ROOT/backend/src/BaseLayer.Api" && ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5080 dotnet run --no-launch-profile) &
+(cd "$ROOT/backend/src/BaseLayer.Api" && ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5080 dotnet watch run --no-launch-profile) &
 API_PID=$!
 (cd "$ROOT/frontend" && npm run dev) &
 WEB_PID=$!
