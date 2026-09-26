@@ -358,11 +358,12 @@ class ForecastTests(unittest.TestCase):
         self.assertLessEqual(float(rows[0]["outage_likelihood"]), 1)
 
     def test_predict_outage_file_runs_the_forecast_command(self):
-        from baselayer_data.ercot.predict_outage import ROOT, forecast_arguments, run
+        from baselayer_data.ercot.predict_outage import forecast_arguments, run
+        from baselayer_data.paths import data_root
 
-        prices = str(ROOT / "dataset" / "ercot" / "prices" / "rt-prices-2025-08-to-2026-08.csv")
-        output = str(ROOT / "dataset" / "ercot" / "outage-forecast-minutes.csv")
-        args = forecast_arguments(ROOT, ["--no-model"])
+        prices = str(data_root() / "dataset" / "ercot" / "prices" / "rt-prices-2025-08-to-2026-08.csv")
+        output = str(data_root() / "dataset" / "ercot" / "outage-forecast-minutes.csv")
+        args = forecast_arguments(data_root(), ["--no-model"])
         self.assertEqual(args[args.index("--prices") + 1], prices)
         self.assertEqual(args[args.index("--out") + 1], output)
         self.assertIn("--no-model", args)

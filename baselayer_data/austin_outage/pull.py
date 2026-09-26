@@ -14,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from ..ercot_pull import bulk_download, list_archive, rtm_price_years, rtm_prices
+from ..logs import get_logger
 from ..storage import write_parq
 
 LOAD = "np6-345-cd"
@@ -25,7 +26,7 @@ FORECAST_CUTOFF = dt.time(10, 0)
 
 
 def _log(message):
-    print(f"[{dt.datetime.now():%H:%M:%S}] {message}", flush=True)
+    get_logger("austin-outage-pull").info(message)
 
 
 def _write(df, path):

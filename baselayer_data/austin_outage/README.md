@@ -18,7 +18,9 @@ From the repository root, with `baselayer_data/ercot/.env` holding
 .venv/bin/python -m unittest baselayer_data.austin_outage.test_labels
 ```
 
-Everything is written under `dataset/austin-outage/`, which is gitignored.
+Data is written under `$DATA_ROOT/dataset/austin-outage/` and the pull log to
+`$DATA_ROOT/logs/austin-outage-pull.log`. `DATA_ROOT` defaults to the current
+directory (see [../README.md](../README.md#where-files-go)).
 Load the results with:
 
 ```python
