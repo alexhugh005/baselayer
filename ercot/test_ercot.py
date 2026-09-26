@@ -153,6 +153,52 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(captured["subscription"], "sub-key")
         self.assertEqual(page["_embedded"]["products"][0]["emilId"], "NP3-233-CD")
 
+    def test_public_data_uses_esr_subscription_key(self):
+        api = PublicApi(
+            username="user@example.com",
+            password="secret",
+            subscription_key="sub-key",
+            esr_subscription_key="esr-key",
+        )
+        captured = {}
+
+        def fake_urlopen(request, timeout=None):
+            if "b2clogin.com" in request.full_url:
+                return FakeResponse({"id_token": "id-xyz", "expires_in": "3600"})
+            captured[request.full_url] = request.headers.get("Ocp-apim-subscription-key")
+            return FakeResponse({})
+
+        with patch("ercot.client.urlopen", fake_urlopen):
+            api.request("/api/public-data")
+            api.request("/api/public-data/archive/rptesr-m")
+            api.request("/api/public-reports")
+            api.request("https://api.ercot.com/api/public-data-other")
+        self.assertEqual(
+            captured,
+            {
+                "https://api.ercot.com/api/public-data": "esr-key",
+                "https://api.ercot.com/api/public-data/archive/rptesr-m": "esr-key",
+                "https://api.ercot.com/api/public-reports": "sub-key",
+                "https://api.ercot.com/api/public-data-other": "sub-key",
+            },
+        )
+
+    def test_missing_esr_key_names_its_variable(self):
+        with self.assertRaises(ErcotConfigError) as ctx:
+            self.api.request("/api/public-data")
+        self.assertIn("ERCOT_ESR_API_SUBSCRIPTION_KEY", str(ctx.exception))
+
+    def test_reads_new_and_legacy_key_names(self):
+        api = PublicApi(
+            config={
+                "ERCOT_PUBLIC_API_SUBSCRIPTION_KEY": "public",
+                "ERCOT_ESR_API_SUBSCRIPTION_KEY": "esr",
+                "ERCOT_SUBSCRIPTION_KEY": "legacy",
+            }
+        )
+        self.assertEqual((api.subscription_key, api.esr_subscription_key), ("public", "esr"))
+        self.assertEqual(PublicApi(config={"ERCOT_SUBSCRIPTION_KEY": "legacy"}).subscription_key, "legacy")
+
     def test_product_paths_are_lowercased(self):
         urls = []
 

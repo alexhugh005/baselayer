@@ -21,6 +21,7 @@ TOKEN_URL = (
 )
 CLIENT_ID = "fec253ea-0d06-4272-a5e6-b478baeecd70"
 API_BASE = "https://api.ercot.com"
+ESR_API_PREFIX = "/api/public-data"
 USER_AGENT = "baselayer-ercot/1.0"
 TOKEN_SKEW_SECONDS = 60
 DEFAULT_TIMEOUT = 30
@@ -82,6 +83,8 @@ def load_config(env_file=None):
     for key in (
         "ERCOT_USERNAME",
         "ERCOT_PASSWORD",
+        "ERCOT_PUBLIC_API_SUBSCRIPTION_KEY",
+        "ERCOT_ESR_API_SUBSCRIPTION_KEY",
         "ERCOT_SUBSCRIPTION_KEY",
         "ERCOT_CLIENT_ID",
         "ERCOT_TOKEN_URL",
@@ -186,13 +189,19 @@ def with_query(url, params):
 
 
 class PublicApi:
-    """Client for https://api.ercot.com/api/public-reports."""
+    """Client for https://api.ercot.com/api/public-reports and /api/public-data.
+
+    Each API is a separate API Explorer subscription with its own key:
+    "Public API" for /api/public-reports (EMIL reports) and "Energy Storage
+    Resource (ESR) API" for /api/public-data.
+    """
 
     def __init__(
         self,
         username=None,
         password=None,
         subscription_key=None,
+        esr_subscription_key=None,
         client_id=CLIENT_ID,
         token_url=TOKEN_URL,
         api_base=API_BASE,
@@ -202,7 +211,15 @@ class PublicApi:
         values = dict(config or {})
         self.username = username or values.get("ERCOT_USERNAME")
         self.password = password or values.get("ERCOT_PASSWORD")
-        self.subscription_key = subscription_key or values.get("ERCOT_SUBSCRIPTION_KEY")
+        # ERCOT_SUBSCRIPTION_KEY is the older name for the Public API key.
+        self.subscription_key = (
+            subscription_key
+            or values.get("ERCOT_PUBLIC_API_SUBSCRIPTION_KEY")
+            or values.get("ERCOT_SUBSCRIPTION_KEY")
+        )
+        self.esr_subscription_key = esr_subscription_key or values.get(
+            "ERCOT_ESR_API_SUBSCRIPTION_KEY"
+        )
         self.client_id = client_id or values.get("ERCOT_CLIENT_ID") or CLIENT_ID
         self.token_url = token_url or values.get("ERCOT_TOKEN_URL") or TOKEN_URL
         self.api_base = (api_base or values.get("ERCOT_API_BASE") or API_BASE).rstrip("/")
@@ -220,7 +237,6 @@ class PublicApi:
             for name, value in (
                 ("ERCOT_USERNAME", self.username),
                 ("ERCOT_PASSWORD", self.password),
-                ("ERCOT_SUBSCRIPTION_KEY", self.subscription_key),
             )
             if not value
         ]
@@ -274,10 +290,20 @@ class PublicApi:
             return path
         return urljoin(self.api_base + "/", path.lstrip("/"))
 
-    def _auth_headers(self, extra=None):
+    def _subscription_key(self, url):
+        path = urlsplit(url).path
+        if path == ESR_API_PREFIX or path.startswith(ESR_API_PREFIX + "/"):
+            key, name = self.esr_subscription_key, "ERCOT_ESR_API_SUBSCRIPTION_KEY"
+        else:
+            key, name = self.subscription_key, "ERCOT_PUBLIC_API_SUBSCRIPTION_KEY"
+        if not key:
+            raise ErcotConfigError(f"missing {name}; see ercot/.env.example")
+        return key
+
+    def _auth_headers(self, url, extra=None):
         headers = {
+            "Ocp-Apim-Subscription-Key": self._subscription_key(url),
             "Authorization": f"Bearer {self.id_token()}",
-            "Ocp-Apim-Subscription-Key": self.subscription_key,
         }
         if extra:
             headers.update(extra)
@@ -295,7 +321,7 @@ class PublicApi:
     def request(self, path, params=None):
         url = with_query(self._url(path), params)
         try:
-            return http_json("GET", url, headers=self._auth_headers(), timeout=self.timeout)
+            return http_json("GET", url, headers=self._auth_headers(url), timeout=self.timeout)
         except ErcotHttpError as exc:
             self._reraise(exc)
 
@@ -309,7 +335,7 @@ class PublicApi:
             _status, response_headers, raw = http_exchange(
                 method,
                 url,
-                headers=self._auth_headers(extra),
+                headers=self._auth_headers(url, extra),
                 data=data,
                 timeout=self.timeout,
             )
