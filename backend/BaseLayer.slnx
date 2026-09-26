@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BaseLayer.Api/BaseLayer.Api.csproj" />
+    <Project Path="src/BaseLayer.Application/BaseLayer.Application.csproj" />
+    <Project Path="src/BaseLayer.Data/BaseLayer.Data.csproj" />
+    <Project Path="src/BaseLayer.Domain/BaseLayer.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BaseLayer.Tests/BaseLayer.Tests.csproj" />
+  </Folder>
+</Solution>

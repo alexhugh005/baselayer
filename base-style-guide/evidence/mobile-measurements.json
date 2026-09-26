@@ -1,0 +1,11 @@
+{
+  "h1": [
+    {
+      "fontSize": "40px",
+      "lineHeight": "44px"
+    }
+  ],
+  "height": 844,
+  "nav": "left-0 right-0 z-50 antialiased duration-300 transition-[background-color] fixed top-0 bg-transparent",
+  "width": 390
+}

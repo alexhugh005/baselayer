@@ -1,1 +1,15 @@
 /local-research/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/__pycache__/
+**/.env.local
+**/.env
+**/appsettings.Local.json
+**/data/
+**/*.db*
+.local/
+
+.DS_Store
+*.tsbuildinfo

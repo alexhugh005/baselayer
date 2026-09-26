@@ -1,1 +1,0 @@
-{"domain":"base_layer","name":"Base Layer","version":"1.0.0","config_flow":true,"integration_type":"helper","iot_class":"local_push","dependencies":["sensor","switch"],"codeowners":[],"requirements":[]}

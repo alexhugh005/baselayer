@@ -1,0 +1,45 @@
+/* Base Power observed design tokens, captured 2026-09-25 (America/Chicago).
+   Values measured from public production CSS. --base-* aliases are ours.
+   Component recipes below are suggested reconstructions, not original source. */
+:root {
+  --base-terminal: #292826;
+  --base-grounded: #1e4d2b;
+  --base-livewire: #b2dd79;
+  --base-conduit: #f0eeeb;
+  --base-strike: #ffffff;
+  --base-energy: #ed6c30;
+  --base-goldenrod: #f7c33c;
+  --base-texas-sky: #048ee5;
+  --base-green-subtle: #d6f0b4;
+  --base-green-hover: #77a45a;
+  --base-green-active: #102a17;
+  --base-border: #d8d7d5;
+  --base-text-secondary: #54524f;
+  --base-text-muted: #7f7d7a;
+  --base-text-disabled: #a9a8a7;
+  --base-error: #c51808;
+  --base-error-surface: #ffccc7;
+  --base-grid-off: #bf5249;
+  --base-font-sans: "PP Neue Montreal", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --base-font-display: "Clarendon Wide", Georgia, serif;
+  --base-font-script: "Dahlia Blues", cursive;
+  --base-space: 4px;
+  --base-radius-control: 8px;
+  --base-radius-media: 16px;
+  --base-radius-step: 20px;
+  --base-radius-panel: 24px;
+  --base-duration-control: 150ms;
+  --base-ease-soft: cubic-bezier(.3,.3,.3,1);
+}
+/* Suggested reusable recipes. Add licensed fonts through your own @font-face. */
+.base-button {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:12px 16px;border:1px solid transparent;border-radius:var(--base-radius-control);font:600 16px/24px var(--base-font-sans);letter-spacing:.2px;cursor:pointer;transition:background-color 150ms,color 150ms,border-color 150ms;}
+.base-button-primary {background:var(--base-livewire);color:var(--base-grounded);}
+/* Current homepage utility-class buttons hover to subtle; older .bpc-button-filled uses green-hover. */
+.base-button-primary:hover {background:var(--base-green-subtle);}
+.base-button-outline {background:transparent;color:var(--base-grounded);border-color:var(--base-grounded);}
+.base-button-outline:hover {color:var(--base-green-active);border-color:var(--base-green-active);}
+.base-button:focus-visible {outline:2px solid var(--base-grounded);outline-offset:2px;}
+.base-button:disabled {background:var(--base-border);color:var(--base-text-muted);cursor:default;}
+.base-card {background:var(--base-strike);border-radius:var(--base-radius-media);padding:24px;}
+.base-heading {font-family:var(--base-font-sans);font-weight:600;letter-spacing:0;line-height:1.1;text-wrap:balance;}
+@media(prefers-reduced-motion:reduce){.base-button{transition:none;}}

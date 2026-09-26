@@ -1,0 +1,29 @@
+{
+  "assets": [
+    {
+      "contentType": "text/css",
+      "id": "c2019bc3a6519135",
+      "kind": "stylesheet",
+      "name": "CoreRailSection.C164Ltc4.css",
+      "path": "/var/folders/7t/cnt4t7716cv_dm51067c87980000gn/T/browser-use/assets/fd57dc06-d01b-46a1-be1f-5b540f983eac/c2019bc3a6519135.css",
+      "url": "https://www.basepowercompany.com/_bpc/assets/CoreRailSection.C164Ltc4.css"
+    },
+    {
+      "contentType": "text/css",
+      "id": "68cfa72a6cc22525",
+      "kind": "stylesheet",
+      "name": "MarketingLayout.Bi5_DK1u.css",
+      "path": "/var/folders/7t/cnt4t7716cv_dm51067c87980000gn/T/browser-use/assets/fd57dc06-d01b-46a1-be1f-5b540f983eac/68cfa72a6cc22525.css",
+      "url": "https://www.basepowercompany.com/_bpc/assets/MarketingLayout.Bi5_DK1u.css"
+    }
+  ],
+  "directoryPath": "/var/folders/7t/cnt4t7716cv_dm51067c87980000gn/T/browser-use/assets/fd57dc06-d01b-46a1-be1f-5b540f983eac",
+  "failures": [],
+  "manifestPath": "/var/folders/7t/cnt4t7716cv_dm51067c87980000gn/T/browser-use/assets/fd57dc06-d01b-46a1-be1f-5b540f983eac/manifest.json",
+  "summary": {
+    "downloadedCount": 2,
+    "elapsedMs": 23870.11425000001,
+    "failedCount": 0,
+    "requestedCount": 2
+  }
+}
