@@ -13,12 +13,20 @@ import {
   WashingMachine,
   Thermometer,
   CarFront,
+  createLucideIcon,
 } from "lucide-react";
 import type { Device } from "../../lib/types";
 import { formatPower } from "../dashboard/power";
 import { Badge } from "../../components/ui/Badge";
 import { LoadingStatus } from "../../components/ui/LoadingStatus";
 import { Button } from "../../components/ui/Button";
+
+const Toaster = createLucideIcon("Toaster", [
+  ["path", { d: "M6 9V6a2 2 0 0 1 0-4h8a2 2 0 0 1 0 4v3", key: "bread" }],
+  ["rect", { x: "3", y: "9", width: "16", height: "11", rx: "3", key: "body" }],
+  ["path", { d: "M19 13h3m0-2v4M6 20v2m10-2v2", key: "lever-feet" }],
+  ["circle", { cx: "15", cy: "16", r: "1", key: "dial" }],
+]);
 
 function getDeviceIcon(device: Device) {
   const description = `${device.entityId} ${device.name}`
@@ -37,6 +45,7 @@ function getDeviceIcon(device: Device) {
   )
     return Thermometer;
   if (/\bdryer\b/.test(description)) return WashingMachine;
+  if (/\btoaster\b/.test(description)) return Toaster;
   if (device.entityId.startsWith("light.")) return Lamp;
   if (device.entityId.startsWith("fan.")) return Wind;
   if (device.entityId.includes("heater")) return Flame;
