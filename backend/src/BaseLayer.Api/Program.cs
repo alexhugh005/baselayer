@@ -57,6 +57,7 @@ builder.Services.AddDbContext<PlatformDbContext>(o => o.UseSqlite(connection));
 builder.Services.AddSingleton<HomeOperationGate>();
 builder.Services.AddSingleton<DatabaseGate>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddBatteryServices(builder.Configuration);
 builder.Services.AddScoped<IPlatformRepository, PlatformRepository>();
 builder.Services.AddScoped<IPlatformService, PlatformService>();
 builder.Services.AddSingleton<IUsageLimitReachedService, UsageLimitReachedService>();

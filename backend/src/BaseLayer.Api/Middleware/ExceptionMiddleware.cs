@@ -1,3 +1,4 @@
+using BaseLayer.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 namespace BaseLayer.Api.Middleware;
 
@@ -16,7 +17,7 @@ public sealed class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionM
                 ArgumentException => 400,
                 KeyNotFoundException => 404,
                 UnauthorizedAccessException => 401,
-                HttpRequestException or TaskCanceledException => 502,
+                BatteryProviderException or HttpRequestException or TaskCanceledException => 502,
                 _ => 500
             };
             if (status == 500)
@@ -24,6 +25,7 @@ public sealed class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionM
             var title = status switch
             {
                 500 => "An unexpected error occurred.",
+                502 when exception is BatteryProviderException => "Battery telemetry is unavailable. Try again later.",
                 502 => "Home Assistant could not complete the request. Check its address and connection, then try connecting again.",
                 _ => exception.Message
             };
