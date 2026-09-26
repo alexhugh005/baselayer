@@ -25,7 +25,6 @@ import { ShutoffConfirmation } from "../commands/ShutoffConfirmation";
 import { CommandHistory } from "../commands/CommandHistory";
 import { PairHome } from "../connections/PairHome";
 import { Button } from "../../components/ui/Button";
-import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
 import { LoadingStatus } from "../../components/ui/LoadingStatus";
 export function Dashboard({
@@ -60,13 +59,18 @@ export function Dashboard({
   const syncing =
     home &&
     !error &&
-    (commands.syncingHomeId === home.id ||
+    (commands.busyHomeId === home.id ||
       (home.connected &&
         home.commands.some((command) =>
           ["Pending", "AwaitingConfirmation", "Retrying"].includes(
             command.status,
           ),
         )));
+  const usageProgress = syncing
+    ? commands.busyHomeId === home?.id && commands.syncingHomeId !== home?.id
+      ? "Applying device changes…"
+      : "Re-syncing devices and checking usage…"
+    : undefined;
   if (window.location.pathname === "/settings") {
     return (
       <div className="settings-page">
@@ -146,13 +150,6 @@ export function Dashboard({
                   </option>
                 ))}
               </select>
-              <Badge tone={home.connected ? "green" : "neutral"}>
-                {home.connected
-                  ? "Connected"
-                  : home.revoked
-                    ? "Disconnected"
-                    : "Offline"}
-              </Badge>
             </div>
             <span className="muted">
               {home.lastSeenUtc
@@ -160,29 +157,41 @@ export function Dashboard({
                 : "Waiting for Home Assistant"}
             </span>
           </div>
-          <UsageOverview home={home} />
-          {syncing && (
-            <div className="calm-note">
-              <LoadingStatus>
-                Re-syncing devices and checking usage…
-              </LoadingStatus>
-            </div>
-          )}
-          {high ? (
-            <section className="recommendation">
+          <UsageOverview home={home} progress={usageProgress} />
+          {high || syncing ? (
+            <section
+              className="recommendation"
+              aria-label="Usage limit notification"
+              aria-busy={!!syncing}
+            >
               <div className="alert-icon">
-                <TriangleAlert size={23} />
+                {syncing ? (
+                  <RefreshCw size={23} className="spin" aria-hidden="true" />
+                ) : (
+                  <TriangleAlert size={23} />
+                )}
               </div>
               <div>
-                <h2>Reduce usage</h2>
-                <p>
-                  {home.devices.some((d) => d.recommended)
-                    ? `Suggested shutoffs could reduce usage to ${formatPower(home.projectedWatts)}.`
-                    : "No measured devices available to turn off. Check other appliances."}
-                </p>
+                <h2>{syncing ? "Updating home usage" : "Reduce usage"}</h2>
+                {usageProgress ? (
+                  <>
+                    <p role="status">{usageProgress}</p>
+                    <p>
+                      Checking updated usage against your{" "}
+                      {formatPower(home.limitWatts)} limit.
+                    </p>
+                  </>
+                ) : (
+                  <p>
+                    {home.devices.some((d) => d.recommended)
+                      ? `Suggested shutoffs could reduce usage to ${formatPower(home.projectedWatts)}.`
+                      : "No measured devices available to turn off. Check other appliances."}
+                  </p>
+                )}
               </div>
               <Button
                 variant="secondary"
+                disabled={!!syncing}
                 onClick={() => {
                   setSelected(
                     recommendationIds(home.devices).filter(

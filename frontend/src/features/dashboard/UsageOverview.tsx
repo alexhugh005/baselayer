@@ -3,7 +3,13 @@ import { Activity, PlugZap } from "lucide-react";
 import type { Home } from "../../lib/types";
 import { formatPower } from "./power";
 import { LoadingStatus } from "../../components/ui/LoadingStatus";
-export function UsageOverview({ home }: { home: Home }) {
+export function UsageOverview({
+  home,
+  progress,
+}: {
+  home: Home;
+  progress?: string;
+}) {
   const waitingForUsage =
     home.connected &&
     !home.revoked &&
@@ -16,7 +22,11 @@ export function UsageOverview({ home }: { home: Home }) {
       usage === null ? 0 : Math.min(100, (usage / home.limitWatts) * 100);
   return (
     <section className="overview-grid">
-      <div className="card usage-card">
+      <div
+        className="card usage-card"
+        aria-label="Home usage"
+        aria-busy={!!progress}
+      >
         <div className="eyebrow">
           <Activity size={16} />{" "}
           {home.powerSource === "deviceSum"
@@ -24,7 +34,9 @@ export function UsageOverview({ home }: { home: Home }) {
             : "HOUSEHOLD USAGE"}
         </div>
         <div className="usage-value">
-          {waitingForUsage ? (
+          {progress ? (
+            <LoadingStatus>{progress}</LoadingStatus>
+          ) : waitingForUsage ? (
             <LoadingStatus>Loading usage…</LoadingStatus>
           ) : usage === null ? (
             <span>Usage unavailable</span>
@@ -36,7 +48,8 @@ export function UsageOverview({ home }: { home: Home }) {
         </div>
         <div
           className="meter"
-          role={usage === null ? "status" : "meter"}
+          role={progress ? undefined : usage === null ? "status" : "meter"}
+          aria-hidden={progress ? true : undefined}
           aria-label="Household power"
           aria-valuemin={0}
           aria-valuemax={home.limitWatts}
@@ -52,11 +65,13 @@ export function UsageOverview({ home }: { home: Home }) {
         </div>
         <div className="meter-label">
           <span>
-            {usage === null
-              ? "Waiting for a measurement"
-              : home.powerSource === "deviceSum"
-                ? "Device readings"
-                : "Home Assistant"}
+            {progress && usage !== null
+              ? `Last reading: ${formatPower(usage)}`
+              : usage === null
+                ? "Waiting for a measurement"
+                : home.powerSource === "deviceSum"
+                  ? "Device readings"
+                  : "Home Assistant"}
           </span>
           <strong>{formatPower(home.limitWatts)} limit</strong>
         </div>

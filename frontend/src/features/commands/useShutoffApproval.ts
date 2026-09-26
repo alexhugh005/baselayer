@@ -18,6 +18,7 @@ export function useShutoffApproval(
   const [selected, setSelected] = useState<string[]>([]);
   const [approval, setApproval] = useState<Approval | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyHomeId, setBusyHomeId] = useState<string | null>(null);
   const [syncingHomeId, setSyncingHomeId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const submitting = useRef(false);
@@ -68,6 +69,7 @@ export function useShutoffApproval(
       return;
     submitting.current = true;
     setBusy(true);
+    setBusyHomeId(operation.homeId);
     setError("");
     try {
       // Keep this exact key and payload on ambiguous network failures.
@@ -86,6 +88,7 @@ export function useShutoffApproval(
     } finally {
       submitting.current = false;
       setBusy(false);
+      setBusyHomeId(null);
       setSyncingHomeId(null);
     }
   }
@@ -106,6 +109,7 @@ export function useShutoffApproval(
     selectedDevices,
     approval,
     busy,
+    busyHomeId,
     syncingHomeId,
     error,
     review,

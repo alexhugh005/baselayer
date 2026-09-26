@@ -71,12 +71,13 @@ describe("shutoff approval safety", () => {
   it("shows re-sync progress after submitting recommendations until fresh data arrives", async () => {
     const current = home();
     const sync = deferred<Home[]>();
+    const sending = deferred<[]>();
     const api = {
       homes: vi
         .fn()
         .mockResolvedValueOnce([current])
         .mockReturnValue(sync.promise),
-      turnOff: vi.fn().mockResolvedValue([]),
+      turnOff: vi.fn().mockReturnValue(sending.promise),
     } as unknown as Api;
     render(<Dashboard api={api} />);
     fireEvent.click(
@@ -85,6 +86,12 @@ describe("shutoff approval safety", () => {
     await act(async () =>
       fireEvent.click(screen.getByRole("button", { name: "Turn Off" })),
     );
+    expect(screen.getAllByText("Applying device changes…")).toHaveLength(2);
+    expect(screen.getByText("Last reading: 13.00 kW")).toBeTruthy();
+    await act(async () => sending.resolve([]));
+    expect(
+      screen.getAllByText("Re-syncing devices and checking usage…"),
+    ).toHaveLength(3);
     const modal = within(
       screen.getByRole("dialog", { name: "Device Recommendations" }),
     );
@@ -121,8 +128,8 @@ describe("shutoff approval safety", () => {
       render(<Dashboard api={{ homes } as unknown as Api} />);
       await act(async () => {});
       expect(
-        screen.getByText("Re-syncing devices and checking usage…"),
-      ).toBeTruthy();
+        screen.getAllByText("Re-syncing devices and checking usage…"),
+      ).toHaveLength(2);
       homes.mockResolvedValue([
         { ...current, commands: [{ ...current.commands[0], status }] },
       ]);
