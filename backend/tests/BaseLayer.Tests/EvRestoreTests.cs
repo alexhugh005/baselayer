@@ -169,10 +169,10 @@ public sealed partial class PlatformTests
         var now = DateTime.UtcNow;
         var ev = new Device { EntityId = "switch.ev", Present = true, Allowed = true, State = "on", ShutoffLevel = "Anytime",
             EvCurrentEntityId = "number.ev", EvWattsPerAmp = 240, PowerWatts = 6480,
-            RestoreCurrentAmps = 32, LastManagedCurrentAmps = 27, RestoreQueuedUtc = now.AddSeconds(-30),
-            RestoreAtFront = true, RestoreEligibleSinceUtc = now.AddSeconds(-10) };
+            RestoreEntry = new() { TargetCurrentAmps = 32, LastManagedCurrentAmps = 27, QueuedUtc = now.AddSeconds(-30),
+                AtFront = true, EligibleSinceUtc = now.AddSeconds(-10) } };
         var load = new Device { EntityId = "switch.other", Present = true, Allowed = true, State = "off", ShutoffLevel = "Anytime",
-            RestoreQueuedUtc = now.AddSeconds(-60), RestoreWatts = 1000, RestorePowerOn = true, RestoreEligibleSinceUtc = now.AddSeconds(-10) };
+            RestoreEntry = new() { QueuedUtc = now.AddSeconds(-60), EstimatedWatts = 1000, PowerOn = true, EligibleSinceUtc = now.AddSeconds(-10) } };
         var home = new Home { SmartPowerOffEnabled = true, HouseholdWatts = 7480, Devices = [load, ev],
             CurrentControlsJson = System.Text.Json.JsonSerializer.Serialize(new[] { new CurrentControlDto("number.ev", "EV", 27, 6, 48, 1) }) };
         AutoRestorePolicy.QueueNext(home, now, 11000);
@@ -186,10 +186,7 @@ public sealed partial class PlatformTests
     {
         var home = await QueueLoads();
         db.ChangeTracker.Clear();
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN RestorePowerOn");
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN RestoreCurrentAmps");
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN LastManagedCurrentAmps");
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN RestoreAtFront");
+        await RecreateLegacyRestoreColumns(includeEv: false);
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand DROP COLUMN PreviousCurrentAmps");
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand DROP COLUMN IsRestoration");
         await BaseLayer.Data.DatabaseInitializer.InitializeAsync(db);

@@ -35,10 +35,7 @@ public sealed partial class PlatformTests
         var home = await SmartHome(enabled: false);
         db.ChangeTracker.Clear();
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes DROP COLUMN LastRestoreUtc");
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN RestoreWatts");
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN RestoreQueuedUtc");
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN RestoreEligibleSinceUtc");
-        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN RestoreStatus");
+        await db.Database.ExecuteSqlRawAsync("DROP TABLE RestoreQueueEntries");
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand DROP COLUMN Action");
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE DeviceCommand DROP COLUMN EstimatedWatts");
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes DROP COLUMN SmartPowerOffEnabled");

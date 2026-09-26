@@ -35,18 +35,6 @@ public static class DatabaseInitializer
         await using (var reader = await command.ExecuteReaderAsync())
             while (await reader.ReadAsync())
                 columns.Add(reader.GetString(1));
-        if (!columns.Contains("RestorePowerOn"))
-        {
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestorePowerOn INTEGER NOT NULL DEFAULT 0");
-            if (columns.Contains("RestoreQueuedUtc"))
-                await db.Database.ExecuteSqlRawAsync("UPDATE Device SET RestorePowerOn = 1 WHERE RestoreQueuedUtc IS NOT NULL");
-        }
-        if (!columns.Contains("RestoreCurrentAmps"))
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreCurrentAmps REAL NULL");
-        if (!columns.Contains("LastManagedCurrentAmps"))
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN LastManagedCurrentAmps REAL NULL");
-        if (!columns.Contains("RestoreAtFront"))
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreAtFront INTEGER NOT NULL DEFAULT 0");
         if (!columns.Contains("EvCurrentEntityId"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN EvCurrentEntityId TEXT NULL");
         if (!columns.Contains("EvWattsPerAmp"))
@@ -66,14 +54,7 @@ public static class DatabaseInitializer
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN ShutoffLevel TEXT NOT NULL DEFAULT 'Sometimes'");
             await db.Database.ExecuteSqlRawAsync("UPDATE Device SET ShutoffLevel = 'Never' WHERE Allowed = 0");
         }
-        if (!columns.Contains("RestoreWatts"))
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreWatts REAL NULL");
-        if (!columns.Contains("RestoreQueuedUtc"))
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreQueuedUtc TEXT NULL");
-        if (!columns.Contains("RestoreEligibleSinceUtc"))
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreEligibleSinceUtc TEXT NULL");
-        if (!columns.Contains("RestoreStatus"))
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN RestoreStatus TEXT NOT NULL DEFAULT 'waiting'");
+        await RestoreQueueSchema.InitializeAsync(db, columns);
         command.CommandText = "PRAGMA table_info('DeviceCommand')";
         var commandColumns = new HashSet<string>();
         await using (var reader = await command.ExecuteReaderAsync())

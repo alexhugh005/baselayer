@@ -100,7 +100,7 @@ public sealed partial class PlatformTests
         Assert.False(SmartUsagePolicy.Controllable(device));
         Assert.Empty(new UsageLimitReachedService().RecommendActions(13000, 11000, [device]));
         device.State = "off";
-        device.RestoreWatts = 100;
+        device.RestoreEntry = new() { DeviceId = device.Id, EstimatedWatts = 100, PowerOn = true };
         Assert.False(AutoRestorePolicy.Fits(new Home { SmartPowerOffEnabled = true, HouseholdWatts = 500 }, device, 11000));
     }
 }

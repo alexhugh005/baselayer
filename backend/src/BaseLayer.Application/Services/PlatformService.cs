@@ -44,9 +44,9 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
         return new(home.Id, home.Name, online, home.Revoked, home.LastSeenUtc, currentWatts, limitWatts, projected,
             home.Devices.Where(d => d.Present).OrderBy(d => d.Name).Select(d => new DeviceDto(d.EntityId, d.Name, online ? d.State : "unavailable", online ? d.PowerWatts : null, d.Allowed, recommendations.Contains(d.EntityId), d.PowerSensorId, d.ThermostatMinF, d.ThermostatMaxF, d.Allowed ? d.ShutoffLevel : ShutoffLevels.Never, SmartPanelCircuit.IsCircuit(d.EntityId), d.EvCurrentEntityId is { } currentId ? new(currentId, d.EvWattsPerAmp) : null, online ? EvControl(home, d) : null, CircuitPriority(home, d, online))).ToList(),
             home.Commands.OrderByDescending(c => c.CreatedUtc).Take(30).Select(Dto).ToList(), home.BaseUrl, home.HouseholdPowerSensorId, home.AllowFutureDevices, Sensors(home), home.PowerSource, home.SmartPowerOffEnabled, smartStatus,
-            AutoRestorePolicy.Ordered(home.Devices.Where(d => d.RestoreQueuedUtc != null))
-                .Select(d => new RestoreQueueDto(d.EntityId, d.Name, AutoRestorePolicy.Estimate(home, d), d.RestoreQueuedUtc!.Value,
-                    d.SmartUsageHeld ? "held" : !home.SmartPowerOffEnabled ? "paused" : AutoRestorePolicy.Estimate(home, d) is null ? "unknown" : d.RestoreStatus, online ? EvControl(home, d)?.Amps : null, d.RestoreCurrentAmps)).ToList(), online ? CurrentControls(home) : []);
+            AutoRestorePolicy.Ordered(home.Devices.Where(d => d.RestoreEntry != null))
+                .Select(d => new RestoreQueueDto(d.EntityId, d.Name, AutoRestorePolicy.Estimate(home, d), d.RestoreEntry!.QueuedUtc,
+                    d.SmartUsageHeld ? "held" : !home.SmartPowerOffEnabled ? "paused" : AutoRestorePolicy.Estimate(home, d) is null ? "unknown" : d.RestoreEntry!.Status, online ? EvControl(home, d)?.Amps : null, d.RestoreEntry!.TargetCurrentAmps)).ToList(), online ? CurrentControls(home) : []);
     }
     private static CommandDto Dto(DeviceCommand c) => new(c.Id, c.EntityId, c.Status, c.Attempts, c.CreatedUtc, c.Message, c.Automatic, c.Action, c.CurrentAmps, c.CircuitPriority, c.PreviousCurrentAmps, c.IsRestoration);
     public async Task<List<HomeDto>> HomesAsync(string owner) => (await repository.HomesAsync(owner)).Select(ToDto).ToList();
@@ -141,7 +141,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
             {
                 device.PowerSensorRevision++;
                 device.LastOnWatts = null;
-                device.RestoreWatts = null;
+                if (device.RestoreEntry is { } entry) entry.EstimatedWatts = null;
             }
             device.PowerSensorId = nextPowerSensor;
             device.PowerWatts = null;
@@ -178,8 +178,8 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
             command.Status = "Cancelled";
             command.Message = "Smart Shutoff disabled. Further attempts stopped; requests already sent cannot be undone.";
         }
-        foreach (var device in home.Devices.Where(d => d.RestoreStatus == "restoring"))
-            device.RestoreStatus = "waiting";
+        foreach (var device in home.Devices.Where(d => d.RestoreEntry?.Status == "restoring"))
+            device.RestoreEntry!.Status = "waiting";
     }
     public Task<HomeDto> KeepOffAsync(string owner, Guid id, string entityId) => operations.RunAsync(id, () => repository.TransactionAsync(async () =>
     {
@@ -440,8 +440,11 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
             {
                 command.Status = "Cancelled";
                 command.Message = "Restoration paused: spare capacity or device state changed.";
-                device.RestoreStatus = "waiting";
-                device.RestoreEligibleSinceUtc = null;
+                if (device.RestoreEntry is { } entry)
+                {
+                    entry.Status = "waiting";
+                    entry.EligibleSinceUtc = null;
+                }
                 continue;
             }
             if (command.Automatic && command.Action == "Off" && (home.HouseholdWatts is not { } current || !double.IsFinite(current) || current < LimitWatts))

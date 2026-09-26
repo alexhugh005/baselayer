@@ -13,7 +13,7 @@ public static class SmartUsagePolicy
     public static bool Controllable(Device device) => device.Present && device.Allowed && !SmartPanelCircuit.IsCircuit(device.EntityId) &&
         device.ShutoffLevel is ShutoffLevels.Anytime or ShutoffLevels.Sometimes &&
         device.EntityId.Split('.')[0] is "switch" or "light" or "fan";
-    public static double? OnEstimate(Device device) => Positive(device.LastOnWatts) ? device.LastOnWatts : device.RestoreWatts;
+    public static double? OnEstimate(Device device) => Positive(device.LastOnWatts) ? device.LastOnWatts : device.RestoreEntry?.EstimatedWatts;
     public static double? Hours(double energyKwh, double watts) => energyKwh == 0 ? 0 : watts == 0 ? null : energyKwh / (watts / 1000);
 
     public static bool CanTurnOn(Home home, Device device, DeviceCommand command) =>
@@ -81,7 +81,7 @@ public static class SmartUsagePolicy
             : loads.Count == 0 ? "No measured, permitted devices are available to plan." : null;
         var revisionData = new { home.Id, home.HouseholdWatts, Target = target,
             Devices = home.Devices.OrderBy(d => d.EntityId, StringComparer.Ordinal).Select(d => new
-            { d.EntityId, d.Present, d.State, d.PowerWatts, d.LastOnWatts, d.RestoreWatts, d.Allowed, d.ShutoffLevel, d.SmartUsageHeld }), changes };
+            { d.EntityId, d.Present, d.State, d.PowerWatts, d.LastOnWatts, RestoreWatts = d.RestoreEntry?.EstimatedWatts, d.Allowed, d.ShutoffLevel, d.SmartUsageHeld }), changes };
         var revision = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(revisionData))));
         return new(home.Id, battery, now, current, allOn, minimum, target, projected,
             Hours(battery.StoredEnergyKwh, current), Hours(battery.StoredEnergyKwh, allOn),

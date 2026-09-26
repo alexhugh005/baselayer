@@ -66,6 +66,16 @@ off are not added. Estimates without a valid positive reading are shown as unkno
 and cannot restore automatically. Old commands without saved estimates are not
 retroactively queued.
 
+Queue state lives in `RestoreQueueEntries`, with `DeviceId` as both its primary key
+and a foreign key to `Device.Id`. Each device has at most one active queue entry;
+names, permissions, sensor mappings, and EV configuration stay on the shared device
+record. Queue rows hold `QueuedUtc`, `EligibleSinceUtc`, `EstimatedWatts`, `Status`,
+`PowerOn`, `AtFront`, `TargetCurrentAmps`, and `LastManagedCurrentAmps`. Finishing or
+removing a restoration deletes its queue row while retaining the device. Deleting
+a device or home cascades to its queue entries. On startup, existing device-based
+queue state is migrated transactionally into this table and the old queue columns
+are removed. The API's `restoreQueue` response stays the same.
+
 With Smart Shutoff enabled, restoration chooses the oldest eligible queued device
 that fits, allowing smaller loads to return while a larger one waits. It requires
 at least 15 seconds off, 5 seconds of fresh readings with sufficient spare

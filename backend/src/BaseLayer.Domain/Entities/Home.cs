@@ -58,14 +58,7 @@ public sealed class Device
     public int PowerSensorRevision { get; set; }
     public double? LastOnWatts { get; set; }
     public bool SmartUsageHeld { get; set; }
-    public double? RestoreWatts { get; set; }
-    public double? RestoreCurrentAmps { get; set; }
-    public double? LastManagedCurrentAmps { get; set; }
-    public bool RestoreAtFront { get; set; }
-    public bool RestorePowerOn { get; set; }
-    public DateTime? RestoreQueuedUtc { get; set; }
-    public DateTime? RestoreEligibleSinceUtc { get; set; }
-    public string RestoreStatus { get; set; } = "waiting";
+    public RestoreQueueEntry? RestoreEntry { get; set; }
     public string ShutoffLevel { get; set; } = ShutoffLevels.Sometimes;
     public double ThermostatMinF { get; set; } = 66;
     public double ThermostatMaxF { get; set; } = 80;

@@ -58,8 +58,8 @@ public sealed partial class PlatformService
         // Restoration must allow for it returning to that limit, including
         // current changes made directly in Home Assistant while it was off.
         device.LastOnWatts = rated is { } watts ? Math.Max(device.LastOnWatts ?? 0, watts) : null;
-        if (device.RestoreQueuedUtc is not null)
-            device.RestoreWatts = rated is { } restore ? Math.Max(device.RestoreWatts ?? 0, restore) : null;
+        if (device.RestoreEntry is { } entry)
+            entry.EstimatedWatts = rated is { } restore ? Math.Max(entry.EstimatedWatts ?? 0, restore) : null;
     }
 
     private bool QueueEvReduction(Home home)
@@ -124,10 +124,10 @@ public sealed partial class PlatformService
         {
             command.Status = "Cancelled";
             command.Message = message;
-            if (command.IsRestoration)
+            if (command.IsRestoration && device.RestoreEntry is { } entry)
             {
-                device.RestoreStatus = "waiting";
-                device.RestoreEligibleSinceUtc = null;
+                entry.Status = "waiting";
+                entry.EligibleSinceUtc = null;
             }
         }
         var control = EvControl(home, device);
@@ -141,17 +141,17 @@ public sealed partial class PlatformService
         {
             command.Status = "Confirmed";
             command.Message = $"Home Assistant reports the EV current limit at {current:0.##} A.";
-            if (command.Automatic && device.RestoreCurrentAmps is not null)
+            if (command.Automatic && device.RestoreEntry is { TargetCurrentAmps: not null } entry)
             {
-                device.LastManagedCurrentAmps = current;
-                device.RestoreStatus = "waiting";
-                device.RestoreEligibleSinceUtc = null;
+                entry.LastManagedCurrentAmps = current;
+                entry.Status = "waiting";
+                entry.EligibleSinceUtc = null;
                 if (command.IsRestoration)
                 {
                     home.LastRestoreUtc = Now;
                     // A partial increase goes to the front, but only if fresh capacity allows another step.
-                    device.RestoreAtFront = true;
-                    if (current >= device.RestoreCurrentAmps) AutoRestorePolicy.ClearCurrentRestore(device);
+                    entry.AtFront = true;
+                    if (current >= entry.TargetCurrentAmps) AutoRestorePolicy.ClearCurrentRestore(device);
                 }
             }
             return;
@@ -168,7 +168,7 @@ public sealed partial class PlatformService
             var safeTarget = command.IsRestoration
                 ? EvChargingPolicy.Increase(home, device, LimitWatts)
                 : EvChargingPolicy.Reduction(home, device, control, LimitWatts);
-            if (safeTarget is null || (command.IsRestoration && device.RestoreQueuedUtc is null))
+            if (safeTarget is null || (command.IsRestoration && device.RestoreEntry is null))
             {
                 Pause("Current adjustment paused: capacity, device state, or restoration target changed.");
                 return;
@@ -180,16 +180,16 @@ public sealed partial class PlatformService
         if (command.Attempts == 0) command.PreviousCurrentAmps = current;
         if (command.Automatic)
         {
+            var entry = AutoRestorePolicy.Enqueue(device, Now);
             if (!command.IsRestoration)
             {
                 // Persist the first pre-reduction limit before sending, including ambiguous network failures.
                 // Further reductions must never replace the original compensation target.
-                device.RestoreCurrentAmps ??= current;
-                device.RestoreQueuedUtc ??= Now;
-                device.RestoreStatus = "waiting";
+                entry.TargetCurrentAmps ??= current;
+                entry.Status = "waiting";
             }
-            device.LastManagedCurrentAmps = target;
-            device.RestoreEligibleSinceUtc = null;
+            entry.LastManagedCurrentAmps = target;
+            entry.EligibleSinceUtc = null;
             if (command.IsRestoration) home.LastRestoreUtc = Now;
         }
         command.Attempts++;

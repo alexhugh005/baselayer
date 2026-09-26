@@ -18,7 +18,7 @@ public static class EvChargingPolicy
             home.HouseholdWatts is not { } total || !double.IsFinite(total) || total < 0 ||
             device.PowerWatts is not { } power || !double.IsFinite(power) || power < 0 || power > total ||
             !double.IsFinite(device.EvWattsPerAmp) || device.EvWattsPerAmp <= 0 ||
-            device.RestoreCurrentAmps is not { } original || control?.Amps is not { } current ||
+            device.RestoreEntry?.TargetCurrentAmps is not { } original || control?.Amps is not { } current ||
             !Valid(control, current) || !Valid(control, original) || current >= original) return null;
         // Leave 500 W spare and budget the full rated draw, even when the car is tapering.
         var available = limitWatts - 500 - (total - power);
