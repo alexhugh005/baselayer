@@ -1161,9 +1161,8 @@ dialog p.error {
     gap: 40px;
   }
   .sidebar .account {
-    margin: auto 0 0;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
+    margin: 0;
+    padding: 8px 10px;
     flex-wrap: wrap;
   }
   .app-shell > main {
@@ -1207,59 +1206,189 @@ dialog p.error {
   flex: 1;
   min-width: 0;
 }
+.sidebar-footer {
+  display: contents;
+}
 .sidebar-toggle {
   display: none;
 }
 @media (min-width: 761px) {
   .app-shell {
-    transition: padding-left 200ms ease;
+    --sidebar-motion: 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    --logo-step: 300ms;
+    --logo-delay: 120ms;
+    --logo-easing: cubic-bezier(0.4, 0, 0.2, 1);
+    transition: padding-left var(--sidebar-motion);
   }
   .sidebar {
-    transition: width 200ms ease;
+    overflow-x: hidden;
+    transition: width var(--sidebar-motion);
+  }
+  .sidebar .header-inner {
+    transition: padding var(--sidebar-motion);
+  }
+  .sidebar .brand {
+    --base-width: 80px;
+    --brand-height: 30px;
+    position: relative;
+    isolation: isolate;
+    overflow: visible;
+    flex-shrink: 0;
+    height: 30px;
+    align-items: flex-start;
+    gap: 0;
+    transition: height var(--sidebar-motion);
+  }
+  .sidebar .brand > img {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    box-sizing: content-box;
+    padding-right: 4px;
+    background: var(--white);
+    transition:
+      width var(--sidebar-motion),
+      height var(--sidebar-motion);
+  }
+  .sidebar .brand > span {
+    position: absolute;
+    left: calc(var(--base-width) + 4px);
+    top: 0;
+    transition:
+      left var(--logo-step) var(--logo-easing),
+      top var(--logo-step) var(--logo-easing) var(--logo-delay);
+  }
+  .sidebar .brand span > img.layer-logo {
+    width: calc(var(--brand-height) * 401 / 126);
+    height: var(--brand-height);
+    transition:
+      width var(--logo-step) var(--logo-easing) var(--logo-delay),
+      height var(--logo-step) var(--logo-easing) var(--logo-delay);
+  }
+  .sidebar .nav-label,
+  .sidebar .sidebar-toggle-label,
+  .sidebar .account > span {
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 180px;
+    opacity: 1;
+    transition:
+      max-width var(--sidebar-motion),
+      opacity var(--sidebar-motion),
+      transform var(--sidebar-motion);
+  }
+  .sidebar .account {
+    min-height: 44px;
+    flex-wrap: nowrap;
+    transition:
+      padding var(--sidebar-motion),
+      gap var(--sidebar-motion);
+  }
+  .sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
   }
   .sidebar-toggle {
-    display: grid;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px;
+    border: 0;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 20px;
+    text-align: left;
+    white-space: nowrap;
     background: transparent;
+    color: var(--muted);
+    border-radius: 8px;
+    transition:
+      padding var(--sidebar-motion),
+      gap var(--sidebar-motion),
+      color 150ms,
+      background-color 150ms;
+  }
+  .sidebar-toggle:hover {
+    background: var(--conduit);
+    color: var(--grounded);
+  }
+  .sidebar-toggle svg {
+    flex-shrink: 0;
+  }
+  .sidebar-collapsed .sidebar-toggle {
+    padding-inline: 18px;
+    gap: 0;
   }
   .sidebar-navigation .nav-item {
     padding-inline: 10px;
+    transition:
+      padding var(--sidebar-motion),
+      gap var(--sidebar-motion);
   }
   .sidebar-collapsed.app-shell {
     padding-left: 80px;
+    transition-delay: var(--logo-delay);
   }
   .sidebar-collapsed .sidebar {
     width: 80px;
+    transition-delay: var(--logo-delay);
   }
   .sidebar-collapsed .sidebar .header-inner {
     padding: 32px 12px 24px;
-    align-items: center;
-  }
-  .sidebar-collapsed .sidebar .brand {
-    gap: 0;
   }
   .sidebar-collapsed .sidebar .brand > img {
     width: 52px;
-    height: auto;
+    height: 19.5px;
   }
-  .sidebar-collapsed .brand > span,
+  .sidebar-collapsed .sidebar .brand {
+    height: 44px;
+  }
+  .sidebar-collapsed .brand > span {
+    left: 0;
+    top: 23.5px;
+    transition:
+      left var(--logo-step) var(--logo-easing) var(--logo-delay),
+      top var(--logo-step) var(--logo-easing);
+  }
+  .sidebar-collapsed .brand span > img.layer-logo {
+    width: 52px;
+    height: calc(52px * 126 / 401);
+    transition-delay: 0ms;
+  }
   .sidebar-collapsed .nav-label,
+  .sidebar-collapsed .sidebar-toggle-label,
   .sidebar-collapsed .account > span {
-    display: none;
-  }
-  .sidebar-collapsed .sidebar-navigation {
-    flex-direction: column;
-    width: 100%;
-    gap: 16px;
-  }
-  .sidebar-collapsed .sidebar-navigation nav {
-    width: 100%;
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-8px);
   }
   .sidebar-collapsed .nav-item {
-    justify-content: center;
+    padding-inline: 18px;
+    gap: 0;
   }
   .sidebar-collapsed .sidebar .account {
-    width: 100%;
-    justify-content: center;
+    padding-inline: 12px;
+    gap: 0;
+  }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .sidebar .brand {
+    --base-width: 64px;
+    --brand-height: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    --sidebar-motion: 0ms;
+    --logo-step: 0ms;
+    --logo-delay: 0ms;
   }
 }
 @media (min-width: 1500px) {

@@ -1,5 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  LayoutDashboard,
+  ChevronsLeft,
+  ChevronsRight,
+  Settings,
+} from "lucide-react";
 
 export function AppShell({
   children,
@@ -46,19 +51,36 @@ export function AppShell({
           <div className="sidebar-navigation">
             <nav id="workspace-navigation" aria-label="Main navigation">
               <a
-                className="nav-item active"
+                className={`nav-item${window.location.pathname === "/" ? " active" : ""}`}
                 href="/"
-                aria-current="page"
+                aria-current={
+                  window.location.pathname === "/" ? "page" : undefined
+                }
                 aria-label="Overview"
                 title="Overview"
               >
                 <LayoutDashboard size={18} />{" "}
                 <span className="nav-label">Overview</span>
               </a>
+              <a
+                className={`nav-item${window.location.pathname === "/settings" ? " active" : ""}`}
+                href="/settings"
+                aria-current={
+                  window.location.pathname === "/settings" ? "page" : undefined
+                }
+                aria-label="Settings"
+                title="Settings"
+              >
+                <Settings size={18} />
+                <span className="nav-label">Settings</span>
+              </a>
             </nav>
+          </div>
+          <div className="sidebar-footer">
+            <div className="account">{account}</div>
             <button
               type="button"
-              className="icon-button sidebar-toggle"
+              className="sidebar-toggle"
               onClick={toggleSidebar}
               aria-expanded={!collapsed}
               aria-controls="workspace-navigation"
@@ -66,13 +88,13 @@ export function AppShell({
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {collapsed ? (
-                <PanelLeftOpen size={20} />
+                <ChevronsRight size={18} aria-hidden="true" />
               ) : (
-                <PanelLeftClose size={20} />
+                <ChevronsLeft size={18} aria-hidden="true" />
               )}
+              <span className="sidebar-toggle-label">Collapse sidebar</span>
             </button>
           </div>
-          <div className="account">{account}</div>
         </div>
       </aside>
       <main id="main-content">{children}</main>
