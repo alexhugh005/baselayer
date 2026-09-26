@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from urllib.error import URLError
 
+from ..paths import dataset_root
 from .client import ErcotError, PublicApi, load_config
 from .dashboards import DASHBOARDS, DashboardClient
 from .household import previous_complete_month_start, save_household_usage
@@ -44,6 +45,7 @@ def _parse_params(pairs):
 
 
 def main(argv=None):
+    data = str(dataset_root())
     parser = argparse.ArgumentParser(
         prog="python -m baselayer_data.ercot",
         description="Connect to ERCOT Public Data API and public dashboards.",
@@ -57,7 +59,7 @@ def main(argv=None):
         "daily-usage",
         help="save actual ERCOT demand summarized by operating day",
     )
-    usage.add_argument("--out", default="dataset", help="output directory (default: dataset)")
+    usage.add_argument("--out", default=data, help="output directory (default: $DATA_ROOT/dataset)")
     estimate = sub.add_parser("household-estimate", help="save an estimated household load profile")
     estimate.add_argument("--out", default=None, help="CSV output path")
     estimate.add_argument("--start-date", default=previous_complete_month_start().isoformat())
@@ -68,7 +70,7 @@ def main(argv=None):
         "datasets",
         help="save live dashboard JSON into the dataset folder",
     )
-    datasets.add_argument("--out", default="dataset", help="output directory (default: dataset)")
+    datasets.add_argument("--out", default=data, help="output directory (default: $DATA_ROOT/dataset)")
     download = sub.add_parser(
         "download",
         help="download a Public Data API artifact or archive into the dataset folder",
@@ -79,7 +81,7 @@ def main(argv=None):
         nargs="?",
         help="artifact name; omit to download posted archive files",
     )
-    download.add_argument("--out", default="dataset", help="output directory (default: dataset)")
+    download.add_argument("--out", default=data, help="output directory (default: $DATA_ROOT/dataset)")
     download.add_argument("--format", default="csv", choices=("csv", "json"))
     download.add_argument("--limit", type=int, default=None, help="max archive files")
     download.add_argument("--param", action="append", default=[], help="query parameter key=value")
@@ -101,11 +103,11 @@ def main(argv=None):
     )
     forecast.add_argument(
         "--prices",
-        default="dataset/ercot/prices/rt-prices-2025-08-to-2026-08.csv",
+        default=f"{data}/ercot/prices/rt-prices-2025-08-to-2026-08.csv",
     )
-    forecast.add_argument("--outages", default="dataset/ercot/np3-233-cd/csv")
-    forecast.add_argument("--weather-dir", default="dataset/ercot/weather")
-    forecast.add_argument("--out", default="dataset/ercot/outage-forecast-minutes.csv")
+    forecast.add_argument("--outages", default=f"{data}/ercot/np3-233-cd/csv")
+    forecast.add_argument("--weather-dir", default=f"{data}/ercot/weather")
+    forecast.add_argument("--out", default=f"{data}/ercot/outage-forecast-minutes.csv")
     forecast.add_argument("--minutes", type=int, default=60)
     forecast.add_argument("--k", type=int, default=25)
     forecast.add_argument("--as-of", default=None, help="ISO timestamp in ERCOT operating time")
@@ -135,7 +137,7 @@ def main(argv=None):
             return 0
         if args.command == "household-estimate":
             start = args.start_date.replace("-", "")
-            output = args.out or f"dataset/household-estimate-{start}-{args.interval_minutes}min.csv"
+            output = args.out or f"{data}/household-estimate-{start}-{args.interval_minutes}min.csv"
             path = save_household_usage(
                 output,
                 start_date=args.start_date,

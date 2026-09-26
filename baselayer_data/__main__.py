@@ -8,7 +8,8 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 
-from .storage import DATASET_ROOT, list_datasets
+from .paths import dataset_root
+from .storage import list_datasets
 
 
 def main(argv=None):
@@ -18,7 +19,9 @@ def main(argv=None):
     listing.add_argument("--raw", action="store_true", help="include raw pulls")
 
     outage = sub.add_parser("austin-outage", help="Austin grid outage classifier dataset")
-    outage.add_argument("--out", default=DATASET_ROOT / "austin-outage")
+    outage.add_argument(
+        "--out", default=None, help="output folder (default: $DATA_ROOT/dataset/austin-outage)"
+    )
     steps = outage.add_subparsers(dest="step", required=True)
     steps.add_parser("labels", help="write labels.parq")
     pull = steps.add_parser("pull", help="download raw ERCOT data for the labeled days")
@@ -35,7 +38,7 @@ def main(argv=None):
 
     from .austin_outage import features, labels, pull as pulling
 
-    out = Path(args.out)
+    out = Path(args.out) if args.out else dataset_root() / "austin-outage"
     table = labels.build_labels()
     if args.step == "labels":
         path = labels.save_labels(table, out)

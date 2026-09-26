@@ -1,4 +1,4 @@
-"""Save and load datasets as .parq files under the repository's dataset/ folder.
+"""Save and load datasets as .parq files under $DATA_ROOT/dataset/ (see paths.py).
 
 pandas is imported only when reading, so importing baselayer_data.ercot
 stays standard-library only.
@@ -6,19 +6,19 @@ stays standard-library only.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
+from .paths import dataset_root
+
 SUFFIX = ".parq"
-DATASET_ROOT = Path(
-    os.environ.get("BASELAYER_DATASET_DIR")
-    or Path(__file__).resolve().parents[1] / "dataset"
-)
 
 
 def dataset_path(name, root=None):
-    """dataset/<name>.parq, where name may contain folders ("austin-outage/daily")."""
-    return Path(root or DATASET_ROOT) / f"{name}{SUFFIX}"
+    """<root>/<name>.parq, where name may contain folders ("austin-outage/daily").
+
+    root defaults to $DATA_ROOT/dataset.
+    """
+    return Path(root or dataset_root()) / f"{name}{SUFFIX}"
 
 
 def write_parq(df, path):
@@ -44,7 +44,7 @@ def load(name, columns=None, root=None):
 
 def list_datasets(root=None, include_raw=False):
     """Dataset names under the root, skipping raw/ pulls unless asked."""
-    root = Path(root or DATASET_ROOT)
+    root = Path(root or dataset_root())
     names = []
     for path in sorted(root.rglob(f"*{SUFFIX}")):
         relative = path.relative_to(root)
