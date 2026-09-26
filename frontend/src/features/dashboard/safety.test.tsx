@@ -170,10 +170,10 @@ describe("device permissions", () => {
     ).toBe("sensor.dryer_power");
     expect(settings).not.toHaveBeenCalled();
     fireEvent.click(
-      screen.getByRole("radio", { name: "Sum of device readings" }),
+      screen.getByRole("switch", { name: "I have a whole-home meter" }),
     );
     expect(
-      screen.queryByRole("combobox", { name: "Whole-house power meter" }),
+      screen.queryByRole("combobox", { name: "Whole-home power sensor" }),
     ).toBeNull();
     fireEvent.change(
       screen.getByRole("combobox", { name: "heater power sensor" }),
@@ -193,6 +193,62 @@ describe("device permissions", () => {
     );
   });
 
+  it("keeps device pairings available and unchanged across meter modes and permission changes", async () => {
+    const current = home();
+    current.householdPowerSensorId = "sensor.home_power";
+    current.powerSensors = [
+      { entityId: "sensor.home_power", name: "Home power", unit: "W" },
+      { entityId: "sensor.dryer_power", name: "Dryer power", unit: "W" },
+    ];
+    current.devices[0].powerSensorId = "sensor.dryer_power";
+    const settings = vi.fn().mockResolvedValue(current);
+    render(
+      <DeviceSettings
+        home={current}
+        api={{ settings } as unknown as Api}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const toggle = screen.getByRole("switch", {
+      name: "I have a whole-home meter",
+    });
+    const pairing = screen.getByRole("combobox", {
+      name: "dryer power sensor",
+    }) as HTMLSelectElement;
+    fireEvent.click(toggle);
+    expect(
+      screen.queryByRole("combobox", { name: "Whole-home power sensor" }),
+    ).toBeNull();
+    expect(pairing.value).toBe("sensor.dryer_power");
+    expect(pairing.disabled).toBe(false);
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Allow shutoff for dryer" }),
+    );
+    expect(pairing.disabled).toBe(false);
+    fireEvent.click(toggle);
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: "Whole-home power sensor",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("sensor.home_power");
+    expect(pairing.value).toBe("sensor.dryer_power");
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Save settings" })),
+    );
+    expect(settings).toHaveBeenCalledWith(
+      "home-1",
+      expect.objectContaining({
+        powerSource: "wholeHouseMeter",
+        householdPowerSensorId: "sensor.home_power",
+        devicePowerSensors: { "switch.dryer": "sensor.dryer_power" },
+        allowedEntityIds: ["switch.heater"],
+      }),
+    );
+  });
+
   it("reflects existing all access, clears it, and keeps future access separate", async () => {
     const settings = vi.fn().mockResolvedValue(home());
     render(
@@ -204,17 +260,20 @@ describe("device permissions", () => {
       />,
     );
     const all = screen.getByRole("checkbox", {
-      name: "Allow all current devices",
+      name: "Allow shutoff for all current devices",
     }) as HTMLInputElement;
     expect(all.checked).toBe(true);
     fireEvent.click(all);
     expect(
-      (screen.getByRole("checkbox", { name: "dryer" }) as HTMLInputElement)
-        .checked,
+      (
+        screen.getByRole("checkbox", {
+          name: "Allow shutoff for dryer",
+        }) as HTMLInputElement
+      ).checked,
     ).toBe(false);
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: "Allow future devices",
+        name: "Allow shutoff for new devices automatically",
       }),
     );
     await act(async () =>
@@ -243,7 +302,7 @@ describe("device permissions", () => {
       />,
     );
     const all = screen.getByRole("checkbox", {
-      name: "Allow all current devices",
+      name: "Allow shutoff for all current devices",
     }) as HTMLInputElement;
     expect(all.indeterminate).toBe(true);
     await act(async () =>
@@ -261,6 +320,47 @@ describe("device permissions", () => {
 });
 
 describe("poll freshness", () => {
+  it("applies a settings response without fetching all homes and ignores an older poll", async () => {
+    const original = home();
+    const other = { ...home(), id: "home-2" };
+    const pending = deferred<Home[]>();
+    const homes = vi
+      .fn()
+      .mockResolvedValueOnce([original, other])
+      .mockReturnValueOnce(pending.promise);
+    const updated = { ...original, householdWatts: 7000 };
+    const settings = vi.fn().mockResolvedValue(updated);
+    const api = { homes, settings } as unknown as Api;
+    const { result } = renderHook(() => useHomes(api));
+    await act(async () => {});
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refresh();
+    });
+    const onClose = vi.fn();
+    render(
+      <DeviceSettings
+        home={original}
+        api={api}
+        onSaved={result.current.updateHome}
+        onClose={onClose}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    });
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(result.current.homes[0]).toBe(updated);
+    expect(result.current.homes[1]).toBe(other);
+    expect(homes).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      pending.resolve([original, other]);
+      await refresh;
+    });
+    expect(result.current.homes[0]).toBe(updated);
+    expect(result.current.loading).toBe(false);
+  });
+
   it("does not let an older poll overwrite a newer manual refresh", async () => {
     const old = deferred<Home[]>(),
       latest = deferred<Home[]>();

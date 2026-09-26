@@ -38,9 +38,17 @@ export function useHomes(api: Api) {
       clearTimeout(timer);
     };
   }, [refresh]);
+  const updateHome = useCallback((updated: Home) => {
+    if (!alive.current) return;
+    // A poll started before this save must not restore the old settings.
+    ++sequence.current;
+    setHomes((current) =>
+      current.map((home) => (home.id === updated.id ? updated : home)),
+    );
+  }, []);
   const removeHome = useCallback((id: string) => {
     ++sequence.current;
     setHomes((current) => current.filter((home) => home.id !== id));
   }, []);
-  return { homes, loading, error, refresh, removeHome };
+  return { homes, loading, error, refresh, updateHome, removeHome };
 }

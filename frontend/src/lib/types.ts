@@ -4,6 +4,8 @@ export interface PowerSensor {
   unit: string;
 }
 export interface Device {
+  thermostatMinF?: number;
+  thermostatMaxF?: number;
   entityId: string;
   name: string;
   state: string;
@@ -43,6 +45,7 @@ export interface ConnectionStart {
   expiresUtc: string;
 }
 export interface HomeSettings {
+  thermostatLimits?: Record<string, { minF: number; maxF: number }>;
   powerSource: "wholeHouseMeter" | "deviceSum";
   allowAll: boolean;
   allowFutureDevices: boolean;

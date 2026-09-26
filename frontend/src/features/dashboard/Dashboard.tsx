@@ -28,7 +28,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
 export function Dashboard({ api }: { api: Api }) {
   const [deletingHome, setDeletingHome] = useState<Home | null>(null);
-  const { homes, loading, error, refresh, removeHome } = useHomes(api);
+  const { homes, loading, error, refresh, updateHome, removeHome } =
+    useHomes(api);
   const [active, setActive] = useState(
       new URLSearchParams(window.location.search).get("connected") ?? "",
     ),
@@ -241,7 +242,7 @@ export function Dashboard({ api }: { api: Api }) {
             setSettings(false);
             window.history.replaceState({}, "", "/");
           }}
-          onSaved={() => void refresh()}
+          onSaved={updateHome}
         />
       )}
       {commands.approval && (

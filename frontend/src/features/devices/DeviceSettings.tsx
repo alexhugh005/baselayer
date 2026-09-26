@@ -16,8 +16,29 @@ export function DeviceSettings({
   home: Home;
   api: Api;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (home: Home) => void;
 }) {
+  const [thermostatLimits, setThermostatLimits] = useState(() =>
+    Object.fromEntries(
+      home.devices
+        .filter((d) => d.entityId.startsWith("climate."))
+        .map((d) => [
+          d.entityId,
+          {
+            minF: String(d.thermostatMinF ?? 66),
+            maxF: String(d.thermostatMaxF ?? 80),
+          },
+        ]),
+    ),
+  );
+  const invalidLimits = Object.values(thermostatLimits).some(
+    (range) =>
+      range.minF.trim() === "" ||
+      range.maxF.trim() === "" ||
+      !/^[1-9]\d$/.test(range.minF) ||
+      !/^[1-9]\d$/.test(range.maxF) ||
+      Number(range.minF) >= Number(range.maxF),
+  );
   const [allowed, setAllowed] = useState(
     home.devices.filter((d) => d.allowed).map((d) => d.entityId),
   );
@@ -46,10 +67,17 @@ export function DeviceSettings({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function save() {
+    if (invalidLimits) return;
     setBusy(true);
     setError("");
     try {
-      await api.settings(home.id, {
+      const updatedHome = await api.settings(home.id, {
+        thermostatLimits: Object.fromEntries(
+          Object.entries(thermostatLimits).map(([id, range]) => [
+            id,
+            { minF: Number(range.minF), maxF: Number(range.maxF) },
+          ]),
+        ),
         allowAll: all,
         allowFutureDevices: future,
         allowedEntityIds: allowed,
@@ -60,7 +88,7 @@ export function DeviceSettings({
           Object.entries(mapping).filter(([, v]) => v),
         ),
       });
-      onSaved();
+      onSaved(updatedHome);
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -74,180 +102,232 @@ export function DeviceSettings({
       onClose={onClose}
       className="device-settings"
     >
-      <p>
-        Choose which devices Base Layer can control. Every shutoff needs your
-        approval.
-      </p>
-      <fieldset className="power-source-options">
-        <legend>Measure usage</legend>
-        <label>
+      <section className="energy-source" aria-label="Total usage">
+        <h3>Total usage</h3>
+        <label className="meter-toggle">
           <input
-            type="radio"
-            name="power-source"
+            type="checkbox"
+            role="switch"
             checked={powerSource === "wholeHouseMeter"}
-            onChange={() => {
-              setPowerSource("wholeHouseMeter");
-              setMapping((current) =>
-                Object.fromEntries(
-                  Object.entries(current).map(([id, sensor]) => [
-                    id,
-                    sensor === meter ? "" : sensor,
-                  ]),
-                ),
-              );
-            }}
-          />{" "}
-          Whole-house meter
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="power-source"
-            checked={powerSource === "deviceSum"}
-            onChange={() => setPowerSource("deviceSum")}
-          />{" "}
-          Sum of device readings
-        </label>
-      </fieldset>
-      {powerSource === "wholeHouseMeter" ? (
-        <label className="field">
-          Whole-house power meter
-          <select
-            value={meter}
+            aria-controls="whole-home-meter"
             onChange={(e) => {
-              const next = e.target.value;
-              setMeter(next);
-              setMapping((current) =>
-                Object.fromEntries(
-                  Object.entries(current).map(([id, sensor]) => [
-                    id,
-                    sensor === next ? "" : sensor,
-                  ]),
-                ),
+              setPowerSource(
+                e.target.checked ? "wholeHouseMeter" : "deviceSum",
               );
+              if (e.target.checked) {
+                setMapping((current) =>
+                  Object.fromEntries(
+                    Object.entries(current).map(([id, sensor]) => [
+                      id,
+                      sensor === meter ? "" : sensor,
+                    ]),
+                  ),
+                );
+              }
             }}
-          >
-            <option value="">No meter — usage unknown</option>
-            {home.powerSensors.map((s) => (
-              <option key={s.entityId} value={s.entityId}>
-                {s.name} ({s.unit}) · {s.entityId}
-              </option>
-            ))}
-          </select>
+          />
+          I have a whole-home meter
         </label>
-      ) : (
-        <p className="source-explanation">
-          Includes all assigned sensors, even for view-only devices and standby
-          usage. Other loads are excluded. Avoid overlapping meters, such as a
-          power strip and its appliances. A missing reading makes the total
-          unknown.
-        </p>
-      )}
+        <div id="whole-home-meter" hidden={powerSource !== "wholeHouseMeter"}>
+          <label className="field">
+            Whole-home power sensor
+            <select
+              value={meter}
+              onChange={(e) => {
+                const next = e.target.value;
+                setMeter(next);
+                setMapping((current) =>
+                  Object.fromEntries(
+                    Object.entries(current).map(([id, sensor]) => [
+                      id,
+                      sensor === next ? "" : sensor,
+                    ]),
+                  ),
+                );
+              }}
+            >
+              <option value="">No meter — usage unknown</option>
+              {home.powerSensors.map((sensor) => (
+                <option key={sensor.entityId} value={sensor.entityId}>
+                  {sensor.name} ({sensor.unit})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+      <h3>Devices</h3>
       <p className="muted">
-        Review suggested sensor matches before saving. Leave devices without a
-        sensor as “Power unknown.”
+        Pair sensors to show usage. Every shutoff needs approval.
       </p>
-      <div className="permission-options">
-        <label>
-          <input
-            type="checkbox"
-            ref={selectAll}
-            checked={all}
-            onChange={(e) => {
-              setAllowed(
-                e.target.checked ? home.devices.map((d) => d.entityId) : [],
-              );
-            }}
-          />{" "}
-          Allow all current devices
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={future}
-            onChange={(e) => setFuture(e.target.checked)}
-          />{" "}
-          Allow future devices
-        </label>
-      </div>
       <label className="field">
         Find a device
         <input
           type="search"
-          placeholder="Search by name or entity ID"
+          placeholder="Search devices"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </label>
-      <p className="mapping-summary">
-        {Object.values(mapping).filter(Boolean).length} of {home.devices.length}{" "}
-        devices metered. Check a device to allow control.
-      </p>
-      <div className="mapping-list">
-        {home.devices
-          .filter((d) =>
-            `${d.name} ${d.entityId}`
-              .toLowerCase()
-              .includes(search.toLowerCase()),
-          )
-          .map((d) => (
-            <div className="mapping-row" key={d.entityId}>
-              <label>
+      <table className="device-settings-table">
+        <caption className="visually-hidden">
+          Device sensors and shutoff permissions
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Device</th>
+            <th scope="col">Power sensor</th>
+            <th scope="col" className="shutoff-cell">
+              <span>Allow shutoff</span>
+              <label className="shutoff-checkbox">
                 <input
                   type="checkbox"
-                  checked={allowed.includes(d.entityId)}
-                  onChange={(e) => {
-                    setAllowed((v) =>
+                  ref={selectAll}
+                  checked={all}
+                  aria-label="Allow shutoff for all current devices"
+                  onChange={(e) =>
+                    setAllowed(
                       e.target.checked
-                        ? [...v, d.entityId]
-                        : v.filter((id) => id !== d.entityId),
-                    );
-                  }}
+                        ? home.devices.map((d) => d.entityId)
+                        : [],
+                    )
+                  }
                 />
-                {d.name}
               </label>
-              <small className="muted">
-                {d.entityId}
-                {!d.powerSensorId &&
-                mapping[d.entityId] &&
-                mapping[d.entityId] === suggestions[d.entityId]
-                  ? " · Suggested match"
-                  : ""}
-              </small>
-              <select
-                aria-label={`${d.name} power sensor`}
-                value={mapping[d.entityId] ?? ""}
-                onChange={(e) =>
-                  setMapping((v) => ({ ...v, [d.entityId]: e.target.value }))
-                }
-              >
-                <option value="">Power unknown</option>
-                {[...home.powerSensors]
-                  .sort(
-                    (a, b) =>
-                      sensorMatchScore(d, b) - sensorMatchScore(d, a) ||
-                      a.name.localeCompare(b.name),
-                  )
-                  .map((s) => (
-                    <option
-                      key={s.entityId}
-                      value={s.entityId}
-                      disabled={
-                        (powerSource === "wholeHouseMeter" &&
-                          s.entityId === meter) ||
-                        Object.entries(mapping).some(
-                          ([id, sensor]) =>
-                            id !== d.entityId && sensor === s.entityId,
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {home.devices
+            .filter((d) =>
+              `${d.name} ${d.entityId}`
+                .toLowerCase()
+                .includes(search.toLowerCase()),
+            )
+            .map((d) => (
+              <tr key={d.entityId}>
+                <th scope="row">
+                  <span>{d.name}</span>
+                </th>
+                <td>
+                  <select
+                    aria-label={`${d.name} power sensor`}
+                    value={mapping[d.entityId] ?? ""}
+                    onChange={(e) =>
+                      setMapping((v) => ({
+                        ...v,
+                        [d.entityId]: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">No sensor — usage unknown</option>
+                    {[...home.powerSensors]
+                      .sort(
+                        (a, b) =>
+                          sensorMatchScore(d, b) - sensorMatchScore(d, a) ||
+                          a.name.localeCompare(b.name),
+                      )
+                      .map((s) => (
+                        <option
+                          key={s.entityId}
+                          value={s.entityId}
+                          disabled={
+                            (powerSource === "wholeHouseMeter" &&
+                              s.entityId === meter) ||
+                            Object.entries(mapping).some(
+                              ([id, sensor]) =>
+                                id !== d.entityId && sensor === s.entityId,
+                            )
+                          }
+                        >
+                          {s.name} ({s.unit})
+                        </option>
+                      ))}
+                  </select>
+                  {!d.powerSensorId &&
+                    mapping[d.entityId] &&
+                    mapping[d.entityId] === suggestions[d.entityId] && (
+                      <small className="muted">Suggested match</small>
+                    )}
+                  {thermostatLimits[d.entityId] && (
+                    <fieldset className="temperature-limits">
+                      <legend>Temperature limits</legend>
+                      <div className="temperature-limit-fields">
+                        {(["minF", "maxF"] as const).map((key) => (
+                          <label className="field" key={key}>
+                            {key === "minF" ? "Minimum (°F)" : "Maximum (°F)"}
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={2}
+                              pattern="[1-9][0-9]"
+                              aria-label={`${d.name} ${key === "minF" ? "minimum" : "maximum"} temperature (°F)`}
+                              value={thermostatLimits[d.entityId][key]}
+                              onChange={(e) =>
+                                setThermostatLimits((current) => ({
+                                  ...current,
+                                  [d.entityId]: {
+                                    ...current[d.entityId],
+                                    [key]: e.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+                </td>
+                <td className="shutoff-cell">
+                  <label className="shutoff-checkbox">
+                    <input
+                      type="checkbox"
+                      aria-label={`Allow shutoff for ${d.name}`}
+                      checked={allowed.includes(d.entityId)}
+                      onChange={(e) =>
+                        setAllowed((v) =>
+                          e.target.checked
+                            ? [...v, d.entityId]
+                            : v.filter((id) => id !== d.entityId),
                         )
                       }
-                    >
-                      {s.name} ({s.unit}) · {s.entityId}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          ))}
-      </div>
+                    />
+                  </label>
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+      {!home.devices.some((d) =>
+        `${d.name} ${d.entityId}`.toLowerCase().includes(search.toLowerCase()),
+      ) && (
+        <p className="muted">
+          {home.devices.length ? "No matching devices." : "No devices found."}
+        </p>
+      )}
+      <label className="future-device-access">
+        <input
+          type="checkbox"
+          checked={future}
+          onChange={(e) => setFuture(e.target.checked)}
+        />
+        Allow shutoff for new devices automatically
+      </label>
+      <details className="sensor-pairing-help">
+        <summary>About sensor pairing</summary>
+        <p>
+          Without a sensor, device usage is unknown; shutoff can still be
+          allowed. When adding device readings, unpaired loads are excluded.
+          Include each load once. A missing paired reading makes the total
+          unknown.
+        </p>
+      </details>
+      {invalidLimits && (
+        <p role="alert">
+          Enter two-digit temperatures with the minimum below the maximum.
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -261,7 +341,7 @@ export function DeviceSettings({
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>
-        <Button disabled={busy} onClick={() => void save()}>
+        <Button disabled={busy || invalidLimits} onClick={() => void save()}>
           {busy ? "Saving…" : "Save settings"}
         </Button>
       </div>

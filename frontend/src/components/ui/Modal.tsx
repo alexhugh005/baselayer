@@ -27,13 +27,15 @@ export function Modal({
       aria-label={title}
       className={className}
     >
-      <div className="modal-heading">
-        <h2>{title}</h2>
-        <button className="icon-button" aria-label="Close" onClick={onClose}>
-          <X size={20} />
-        </button>
+      <div className="modal-scroll-content">
+        <div className="modal-heading">
+          <h2>{title}</h2>
+          <button className="icon-button" aria-label="Close" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+        {children}
       </div>
-      {children}
     </dialog>
   );
 }
