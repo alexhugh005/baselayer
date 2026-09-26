@@ -166,6 +166,7 @@ backend/src/
   BaseLayer.Data/        EF Core SQLite context and repository
 backend/tests/           Domain/service/provider regression tests
 baselayer_data/         Data engineering: ERCOT pulls, datasets (.parq), ercot/ API client
+baselayer_model/        Modeling: Austin outage risk classifier (XGBoost) train/evaluate
 ```
 
 This follows the Done With School controller → service → repository style, with
@@ -204,6 +205,6 @@ keys; add operational monitoring, telemetry retention, and deployment-specific
 network controls. No purchases, hosting deployment, or paid subscriptions are part
 of this setup.
 
-Data engineering lives in [`baselayer_data/`](baselayer_data/), including ERCOT Public Data API and live dashboard access in [`baselayer_data/ercot/`](baselayer_data/ercot/). Run `python3 baselayer_data/ercot/predict_outage.py` for the grid outage prediction.
+Data engineering lives in [`baselayer_data/`](baselayer_data/), including ERCOT Public Data API and live dashboard access in [`baselayer_data/ercot/`](baselayer_data/ercot/). Run `python3 baselayer_data/ercot/predict_outage.py` for the grid outage prediction. The XGBoost outage risk classifier trained on those datasets lives in [`baselayer_model/`](baselayer_model/).
 
 Automatic EV reductions also save the original current limit in the restore queue. After 5 seconds of stable spare capacity, the queue raises the amps as far as the available capacity permits, with a 500 W buffer and fresh confirmation before each further increase. Partial restores keep their queue priority until the original limit is reached. Manual current changes cancel that compensation target. See [EV charging](docs/ev-charging.md).
