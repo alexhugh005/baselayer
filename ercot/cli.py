@@ -8,6 +8,7 @@ import sys
 
 from .client import ErcotError, PublicApi
 from .dashboards import DASHBOARDS, DashboardClient
+from .household import previous_complete_month_start, save_household_usage
 
 
 def _print(payload):
@@ -35,6 +36,17 @@ def main(argv=None):
     sub.add_parser("status", help="grid condition, prices, supply, and storage snapshot")
     dash = sub.add_parser("dashboard", help="fetch a public dashboard JSON feed")
     dash.add_argument("name", choices=sorted(DASHBOARDS), help="dashboard alias")
+    usage = sub.add_parser(
+        "daily-usage",
+        help="save actual ERCOT demand summarized by operating day",
+    )
+    usage.add_argument("--out", default="dataset", help="output directory (default: dataset)")
+    estimate = sub.add_parser("household-estimate", help="save an estimated household load profile")
+    estimate.add_argument("--out", default=None, help="CSV output path")
+    estimate.add_argument("--start-date", default=previous_complete_month_start().isoformat())
+    estimate.add_argument("--days", type=int, default=30)
+    estimate.add_argument("--daily-kwh", type=float, default=30.0)
+    estimate.add_argument("--interval-minutes", type=int, choices=(5, 15), default=5)
     datasets = sub.add_parser(
         "datasets",
         help="save live dashboard JSON into the dataset folder",
@@ -74,6 +86,22 @@ def main(argv=None):
             return 0
         if args.command == "dashboard":
             _print(DashboardClient().get(args.name))
+            return 0
+        if args.command == "daily-usage":
+            path = DashboardClient().save_daily_usage(args.out)
+            _print({"file": str(path)})
+            return 0
+        if args.command == "household-estimate":
+            start = args.start_date.replace("-", "")
+            output = args.out or f"dataset/household-estimate-{start}-{args.interval_minutes}min.csv"
+            path = save_household_usage(
+                output,
+                start_date=args.start_date,
+                days=args.days,
+                daily_kwh=args.daily_kwh,
+                interval_minutes=args.interval_minutes,
+            )
+            _print({"file": str(path), "rows": args.days * 24 * 60 // args.interval_minutes})
             return 0
         if args.command == "datasets":
             paths = DashboardClient().save_datasets(args.out)

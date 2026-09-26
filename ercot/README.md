@@ -39,10 +39,12 @@ python3 -m ercot status
 python3 -m ercot dashboard prices
 python3 -m ercot dashboard storage
 python3 -m ercot datasets
+python3 -m ercot daily-usage
 ```
 
-`datasets` writes each live feed to `dataset/dashboards/` and a compact
-snapshot to `dataset/grid-status.json`. That folder is gitignored.
+`datasets` writes each live feed to `dataset/dashboards/`, a compact snapshot to `dataset/grid-status.json`, and an actual-demand summary to `dataset/daily-usage.json`. The summary excludes forecast intervals and reports partial-day coverage. That folder is gitignored.
+
+Official historical daily reports are available as NP6-344-CD (study area), NP6-345-CD (weather zone), and NP6-346-CD (forecast zone) through the [ERCOT load data page](https://www.ercot.com/gridinfo/load).
 
 Public Data API (requires `.env`):
 

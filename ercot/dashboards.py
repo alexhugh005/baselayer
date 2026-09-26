@@ -6,6 +6,8 @@ the Public Data API subscription key.
 
 from __future__ import annotations
 
+from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 from .client import http_json, write_json
@@ -122,6 +124,45 @@ class DashboardClient:
             },
         }
 
+    def daily_usage(self):
+        """Summarize actual ERCOT demand into local operating-day totals.
+
+        The dashboard feed contains both actual and forecast intervals. Only
+        actual rows are included; the coverage fields make partial current-day
+        data distinguishable from a complete day.
+        """
+        rows = self.supply_demand().get("data") or []
+        grouped = defaultdict(list)
+        for row in rows:
+            if row.get("forecast") not in (0, "0", None, "N"):
+                continue
+            timestamp = row.get("timestamp")
+            demand = row.get("demand")
+            if not timestamp or demand is None:
+                continue
+            try:
+                day = datetime.fromisoformat(timestamp).date().isoformat()
+                grouped[day].append(float(demand))
+            except (TypeError, ValueError):
+                continue
+
+        summaries = []
+        for day in sorted(grouped):
+            demands = grouped[day]
+            summaries.append(
+                {
+                    "date": day,
+                    "actual_intervals": len(demands),
+                    "expected_intervals": 288,
+                    "coverage_pct": round(len(demands) / 288 * 100, 2),
+                    "average_demand_mw": round(sum(demands) / len(demands), 2),
+                    "minimum_demand_mw": round(min(demands), 2),
+                    "maximum_demand_mw": round(max(demands), 2),
+                    "estimated_energy_mwh": round(sum(demands) * 5 / 60, 2),
+                }
+            )
+        return summaries
+
     def save_datasets(self, directory):
         """Write each live dashboard feed and a grid snapshot under `directory`."""
         directory = Path(directory)
@@ -131,4 +172,9 @@ class DashboardClient:
                 write_json(directory / "dashboards" / f"{name}.json", self.get(name))
             )
         written.append(write_json(directory / "grid-status.json", self.grid_status()))
+        written.append(write_json(directory / "daily-usage.json", self.daily_usage()))
         return written
+
+    def save_daily_usage(self, directory):
+        """Write the actual-demand daily summary under the output directory."""
+        return write_json(Path(directory) / "daily-usage.json", self.daily_usage())

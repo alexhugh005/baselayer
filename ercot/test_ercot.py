@@ -368,8 +368,9 @@ class DashboardTests(unittest.TestCase):
             with patch("ercot.client.urlopen", fake_urlopen):
                 paths = DashboardClient().save_datasets(tmp)
             names = {path.name for path in paths}
-            self.assertEqual(len(paths), len(DASHBOARDS) + 1)
+            self.assertEqual(len(paths), len(DASHBOARDS) + 2)
             self.assertIn("grid-status.json", names)
+            self.assertIn("daily-usage.json", names)
             self.assertIn("prices.json", names)
             self.assertTrue((Path(tmp) / "dashboards" / "storage.json").is_file())
 
