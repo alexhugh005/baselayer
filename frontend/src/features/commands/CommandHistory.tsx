@@ -33,7 +33,6 @@ export function CommandHistory({
     <section className="card history">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">A CLEAR RECORD</span>
           <h2>Recent activity</h2>
         </div>
         <Clock3 size={20} />
@@ -47,14 +46,11 @@ export function CommandHistory({
         ["Pending", "AwaitingConfirmation", "Retrying"].includes(c.status),
       ) && (
         <p className="muted">
-          Revoke stops further attempts. A shutoff already sent to Home
-          Assistant cannot be undone.
+          Cancel stops retries. Shutoffs already sent cannot be undone.
         </p>
       )}
       {commands.length === 0 ? (
-        <p className="muted">
-          Your approved actions and their confirmed results will appear here.
-        </p>
+        <p className="muted">No activity yet.</p>
       ) : (
         commands.map((c) => (
           <div className="activity-row" key={c.id}>
@@ -64,9 +60,7 @@ export function CommandHistory({
                 {devices.find((d) => d.entityId === c.entityId)?.name ??
                   c.entityId}
               </strong>
-              <p>
-                {c.message ?? "Waiting for Home Assistant to confirm shutoff."}
-              </p>
+              <p>{c.message ?? "Waiting for shutoff confirmation."}</p>
               <small>
                 {new Date(c.createdUtc).toLocaleTimeString([], {
                   hour: "2-digit",
@@ -96,9 +90,9 @@ export function CommandHistory({
                   variant="secondary"
                   disabled={cancelling !== null}
                   onClick={() => void cancel(c.id)}
-                  aria-label={`Revoke command for ${devices.find((d) => d.entityId === c.entityId)?.name ?? c.entityId}`}
+                  aria-label={`Cancel command for ${devices.find((d) => d.entityId === c.entityId)?.name ?? c.entityId}`}
                 >
-                  {cancelling === c.id ? "Revoking…" : "Revoke command"}
+                  {cancelling === c.id ? "Cancelling…" : "Cancel command"}
                 </Button>
               )}
             </div>

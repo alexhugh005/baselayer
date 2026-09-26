@@ -69,8 +69,7 @@ export function Dashboard({ api }: { api: Api }) {
           <div className="breadcrumb">
             WORKSPACE <span>/</span> HOME ENERGY
           </div>
-          <h1>Your home. In balance.</h1>
-          <p>A little visibility. Better decisions. You’re in control.</p>
+          <h1>Home energy</h1>
         </div>
         <Button variant="secondary" onClick={() => setPairing(true)}>
           <Plus size={17} /> Connect a home
@@ -88,15 +87,14 @@ export function Dashboard({ api }: { api: Api }) {
       ) : !home ? (
         <section className="card onboarding">
           <House size={42} />
-          <h2>Give your home a Base Layer.</h2>
+          <h2>Connect your home</h2>
           <p>
-            Connect Home Assistant to bring device usage, clear recommendations,
-            and approved controls into one dashboard.
+            Connect Home Assistant to monitor energy use and control devices.
           </p>
           <Button onClick={() => setPairing(true)}>
-            Connect your first home <ArrowUpRight size={18} />
+            Connect Home Assistant <ArrowUpRight size={18} />
           </Button>
-          <small>No device switches off without your approval.</small>
+          <small>Every shutoff needs your approval.</small>
         </section>
       ) : (
         <>
@@ -111,7 +109,7 @@ export function Dashboard({ api }: { api: Api }) {
                 {homes.map((h) => (
                   <option key={h.id} value={h.id}>
                     {h.name}
-                    {h.revoked ? " (revoked)" : ""}
+                    {h.revoked ? " (disconnected)" : ""}
                   </option>
                 ))}
               </select>
@@ -119,7 +117,7 @@ export function Dashboard({ api }: { api: Api }) {
                 {home.connected
                   ? "Connected"
                   : home.revoked
-                    ? "Revoked"
+                    ? "Disconnected"
                     : "Offline"}
               </Badge>
             </div>
@@ -136,13 +134,11 @@ export function Dashboard({ api }: { api: Api }) {
                 <TriangleAlert size={23} />
               </div>
               <div>
-                <span className="eyebrow">LET’S BRING THAT DOWN</span>
-                <h2>Your home is above its comfort limit.</h2>
+                <h2>Usage has reached the limit.</h2>
                 <p>
-                  Currently {formatPower(home.householdWatts)}.{" "}
                   {home.devices.some((d) => d.recommended)
-                    ? `Review the suggested devices to bring usage toward ${formatPower(home.projectedWatts)}.`
-                    : "No controllable device has a measured load. Check your other appliances."}
+                    ? `Suggested shutoffs could reduce usage to ${formatPower(home.projectedWatts)}.`
+                    : "No measured devices available to turn off. Check other appliances."}
                 </p>
               </div>
               <Button
@@ -152,21 +148,17 @@ export function Dashboard({ api }: { api: Api }) {
                 Select suggestions <ArrowUpRight size={16} />
               </Button>
             </section>
-          ) : (
+          ) : !home.connected ? (
             <div className="calm-note">
               <ShieldCheck size={19} />
-              {home.connected
-                ? "You decide what turns off. Base Layer only sends commands you approve."
-                : "Controls are paused until a fresh connection is established."}
+              Controls are unavailable while disconnected.
             </div>
-          )}
+          ) : null}
           <section className="card">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">KNOW WHAT’S RUNNING</span>
                 <h2>
-                  Your devices{" "}
-                  <span className="count">{home.devices.length}</span>
+                  Devices <span className="count">{home.devices.length}</span>
                 </h2>
               </div>
               <Button
@@ -188,10 +180,7 @@ export function Dashboard({ api }: { api: Api }) {
               }
             />
             <div className="selection-bar">
-              <span>
-                {selectedDevices.length} selected{" "}
-                <small>· Missing power readings are shown as unknown</small>
-              </span>
+              <span>{selectedDevices.length} selected</span>
               <Button
                 disabled={!selectedDevices.length || !home.connected || !!error}
                 onClick={() => {
@@ -213,10 +202,6 @@ export function Dashboard({ api }: { api: Api }) {
             }}
           />
           <div className="connection-footer">
-            <span>
-              <ShieldCheck size={16} /> Your Home Assistant tokens are encrypted
-              on the server.
-            </span>
             <Button
               variant="ghost"
               disabled={home.revoked}
@@ -225,7 +210,7 @@ export function Dashboard({ api }: { api: Api }) {
                 setRevoke(true);
               }}
             >
-              <Unplug size={15} /> Revoke connection
+              <Unplug size={15} /> Disconnect home
             </Button>
             <Button variant="ghost" onClick={() => setDeletingHome(home)}>
               <Trash2 size={15} /> Delete home
@@ -271,9 +256,9 @@ export function Dashboard({ api }: { api: Api }) {
       {revoke && (
         <Modal title="Disconnect this home?" onClose={() => setRevoke(false)}>
           <p>
-            This revokes the Home Assistant authorization and cancels pending
-            commands. Already executed actions cannot be undone. A new Home
-            Assistant authorization will be required to reconnect.
+            Disconnecting cancels pending commands and revokes access to Home
+            Assistant. Shutoffs already sent cannot be undone. Reconnecting
+            requires authorization again.
           </p>
           {actionError && <p role="alert">{actionError}</p>}
           <Button
@@ -281,7 +266,7 @@ export function Dashboard({ api }: { api: Api }) {
             disabled={busy}
             onClick={() => void disconnect()}
           >
-            Revoke access
+            Disconnect home
           </Button>
         </Modal>
       )}

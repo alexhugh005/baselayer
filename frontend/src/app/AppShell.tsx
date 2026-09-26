@@ -1,11 +1,5 @@
 import { useState, type ReactNode } from "react";
-import {
-  LayoutDashboard,
-  ShieldCheck,
-  ArrowUpRight,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { LayoutDashboard, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 export function AppShell({
   children,
@@ -81,18 +75,7 @@ export function AppShell({
           <div className="account">{account}</div>
         </div>
       </aside>
-      <main id="main-content">
-        {children}
-        <footer className="site-footer">
-          <div className="footer-brand">
-            <ShieldCheck size={20} />
-            <strong>Your home. Your control.</strong>
-          </div>
-          <span>
-            Base Layer <ArrowUpRight size={14} /> Less guesswork. More control.
-          </span>
-        </footer>
-      </main>
+      <main id="main-content">{children}</main>
     </div>
   );
 }

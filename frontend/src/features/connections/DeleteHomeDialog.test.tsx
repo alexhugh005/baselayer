@@ -42,7 +42,7 @@ it("deletes the confirmed home once and blocks dismissal while deleting", async 
     ),
     close = vi.fn();
   render(<DeleteHomeDialog home={home} onDelete={remove} onClose={close} />);
-  fireEvent.click(screen.getByRole("button", { name: "Yes, delete home" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete home" }));
   fireEvent.click(screen.getByRole("button", { name: "Deleting…" }));
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   const dialog = screen.getByRole("dialog");
@@ -64,7 +64,7 @@ it("keeps the confirmation open after a failed deletion", async () => {
     />,
   );
   await act(async () =>
-    fireEvent.click(screen.getByRole("button", { name: "Yes, delete home" })),
+    fireEvent.click(screen.getByRole("button", { name: "Delete home" })),
   );
   expect(screen.getByRole("alert").textContent).toBe("Offline");
   expect(close).not.toHaveBeenCalled();
@@ -90,11 +90,11 @@ it("only offers revocation for non-terminal commands and submits the selected co
   }));
   render(<CommandHistory commands={commands} devices={[]} onCancel={cancel} />);
   expect(
-    screen.getAllByRole("button", { name: /Revoke command/ }),
+    screen.getAllByRole("button", { name: /Cancel command/ }),
   ).toHaveLength(3);
   await act(async () =>
     fireEvent.click(
-      screen.getByRole("button", { name: "Revoke command for Retrying" }),
+      screen.getByRole("button", { name: "Cancel command for Retrying" }),
     ),
   );
   expect(cancel).toHaveBeenCalledExactlyOnceWith("Retrying");

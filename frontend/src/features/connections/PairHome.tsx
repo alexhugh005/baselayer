@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUpRight, ShieldCheck } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import type { Api } from "../../lib/api";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
@@ -27,13 +27,9 @@ export function PairHome({ api, onClose }: { api: Api; onClose: () => void }) {
           void connect();
         }}
       >
-        <div className="connect-illustration">
-          <ShieldCheck size={32} />
-          <span>Your home, your permission.</span>
-        </div>
         <p>
-          Sign in directly with Home Assistant to authorize Base Layer. No
-          plugin installation needed.
+          Authorize Base Layer in Home Assistant, then choose your devices and
+          power meters.
         </p>
         <label className="field">
           Home name
@@ -56,9 +52,7 @@ export function PairHome({ api, onClose }: { api: Api; onClose: () => void }) {
           />
         </label>
         <p className="muted">
-          Your Base Layer server must be able to reach this address. After
-          connecting, choose your power meters and which devices Base Layer may
-          control.
+          This address must be reachable from the Base Layer server.
         </p>
         {error && (
           <p role="alert" className="error">

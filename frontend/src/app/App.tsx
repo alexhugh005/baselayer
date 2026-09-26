@@ -15,7 +15,7 @@ function ClerkApp() {
       account={
         <>
           <UserButton />
-          <span>Your account</span>
+          <span>Account</span>
         </>
       }
     >
@@ -29,8 +29,6 @@ function ClerkApp() {
         )
       ) : (
         <div className="signin">
-          <h1>Welcome home.</h1>
-          <p>Sign in to manage your energy.</p>
           <SignIn routing="hash" />
         </div>
       )}

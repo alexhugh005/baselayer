@@ -18,9 +18,8 @@ export function ShutoffConfirmation({
   return (
     <Modal title="Turn off selected devices?" onClose={onClose}>
       <p>
-        You’re approving shutoff of these devices in{" "}
-        <strong>{approval.homeName}</strong>. They will stay off until you turn
-        them on again.
+        Turn off these devices in <strong>{approval.homeName}</strong>. Base
+        Layer won’t turn them back on.
       </p>
       <ul className="confirm-list">
         {approval.devices.map((d) => (
@@ -31,9 +30,8 @@ export function ShutoffConfirmation({
         ))}
       </ul>
       <p className="muted">
-        We’ll verify the result in Home Assistant and retry unconfirmed commands
-        up to 4 attempts, with backoff. Approval expires after 2 minutes. If a
-        device becomes ineligible, this review closes automatically.
+        Unconfirmed shutoffs are retried, up to 4 attempts within 2 minutes.
+        Check Recent activity for results.
       </p>
       {error && (
         <p className="error" role="alert">

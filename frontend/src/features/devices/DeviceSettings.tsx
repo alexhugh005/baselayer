@@ -70,16 +70,16 @@ export function DeviceSettings({
   }
   return (
     <Modal
-      title="Device access & power meters"
+      title="Device settings"
       onClose={onClose}
       className="device-settings"
     >
       <p>
-        Choose which devices you may turn off from Base Layer. This grants
-        access; every shutoff still needs your approval.
+        Choose which devices Base Layer can control. Every shutoff needs your
+        approval.
       </p>
       <fieldset className="power-source-options">
-        <legend>How should we measure usage?</legend>
+        <legend>Measure usage</legend>
         <label>
           <input
             type="radio"
@@ -97,7 +97,7 @@ export function DeviceSettings({
               );
             }}
           />{" "}
-          Use a whole-house meter
+          Whole-house meter
         </label>
         <label>
           <input
@@ -106,7 +106,7 @@ export function DeviceSettings({
             checked={powerSource === "deviceSum"}
             onChange={() => setPowerSource("deviceSum")}
           />{" "}
-          Add up device power readings
+          Sum of device readings
         </label>
       </fieldset>
       {powerSource === "wholeHouseMeter" ? (
@@ -127,7 +127,7 @@ export function DeviceSettings({
               );
             }}
           >
-            <option value="">No meter selected — usage unknown</option>
+            <option value="">No meter — usage unknown</option>
             {home.powerSensors.map((s) => (
               <option key={s.entityId} value={s.entityId}>
                 {s.name} ({s.unit}) · {s.entityId}
@@ -137,15 +137,15 @@ export function DeviceSettings({
         </label>
       ) : (
         <p className="source-explanation">
-          Adds the mapped devices below, including devices without control
-          access and standby usage. Unmapped loads are not included. Avoid
-          overlapping meters, such as a power strip and its appliances. If a
-          mapped reading is unavailable, the total is unknown.
+          Includes all assigned sensors, even for view-only devices and standby
+          usage. Other loads are excluded. Avoid overlapping meters, such as a
+          power strip and its appliances. A missing reading makes the total
+          unknown.
         </p>
       )}
       <p className="muted">
-        Similar device and sensor names are matched for you. Review the
-        suggestions before saving; uncertain matches stay unselected.
+        Review suggested sensor matches before saving. Leave devices without a
+        sensor as “Power unknown.”
       </p>
       <div className="permission-options">
         <label>
@@ -159,7 +159,7 @@ export function DeviceSettings({
               );
             }}
           />{" "}
-          Allow all current supported devices
+          Allow all current devices
         </label>
         <label>
           <input
@@ -167,7 +167,7 @@ export function DeviceSettings({
             checked={future}
             onChange={(e) => setFuture(e.target.checked)}
           />{" "}
-          Also allow supported devices added in the future
+          Allow future devices
         </label>
       </div>
       <label className="field">
@@ -181,7 +181,7 @@ export function DeviceSettings({
       </label>
       <p className="mapping-summary">
         {Object.values(mapping).filter(Boolean).length} of {home.devices.length}{" "}
-        devices have a power sensor. Control access is selected separately.
+        devices metered. Check a device to allow control.
       </p>
       <div className="mapping-list">
         {home.devices
@@ -211,7 +211,7 @@ export function DeviceSettings({
                 {!d.powerSensorId &&
                 mapping[d.entityId] &&
                 mapping[d.entityId] === suggestions[d.entityId]
-                  ? " · Suggested match — review before saving"
+                  ? " · Suggested match"
                   : ""}
               </small>
               <select
@@ -254,16 +254,15 @@ export function DeviceSettings({
         </p>
       )}
       <p className="muted">
-        Home Assistant grants account-level access. These selections restrict
-        what Base Layer will control. Choose each device’s individual power
-        sensor; leave it unknown if no measurement is available.
+        Home Assistant grants account-level access. These settings limit what
+        Base Layer can control.
       </p>
       <div className="modal-actions">
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>
         <Button disabled={busy} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save permissions"}
+          {busy ? "Saving…" : "Save settings"}
         </Button>
       </div>
     </Modal>

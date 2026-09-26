@@ -68,7 +68,7 @@ export function DeviceList({
       })}
       {devices.length === 0 && (
         <p className="empty">
-          <Power /> Devices will appear after the integration connects.
+          <Power /> No devices found.
         </p>
       )}
     </div>

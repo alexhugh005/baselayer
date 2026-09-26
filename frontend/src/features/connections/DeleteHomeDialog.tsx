@@ -38,14 +38,13 @@ export function DeleteHomeDialog({
       }}
     >
       <p>
-        This permanently removes <strong>{home.name}</strong>, its device
-        settings, and command history from Base Layer. Pending commands are
-        cancelled and the connection is revoked.
+        Permanently delete <strong>{home.name}</strong>, its settings, and
+        activity from Base Layer. This also disconnects the home and cancels
+        pending commands.
       </p>
       <p>
-        Your devices and Home Assistant installation will remain. Shutoffs
-        already sent cannot be undone. To add this home again, you will need to
-        reconnect it.
+        Home Assistant and your devices are kept. Shutoffs already sent cannot
+        be undone. Adding this home again requires reconnecting.
       </p>
       {error && (
         <p className="error" role="alert">
@@ -57,7 +56,7 @@ export function DeleteHomeDialog({
           Keep home
         </Button>
         <Button variant="danger" disabled={busy} onClick={() => void remove()}>
-          {busy ? "Deleting…" : "Yes, delete home"}
+          {busy ? "Deleting…" : "Delete home"}
         </Button>
       </div>
     </Modal>

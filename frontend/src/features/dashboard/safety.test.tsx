@@ -170,7 +170,7 @@ describe("device permissions", () => {
     ).toBe("sensor.dryer_power");
     expect(settings).not.toHaveBeenCalled();
     fireEvent.click(
-      screen.getByRole("radio", { name: "Add up device power readings" }),
+      screen.getByRole("radio", { name: "Sum of device readings" }),
     );
     expect(
       screen.queryByRole("combobox", { name: "Whole-house power meter" }),
@@ -180,7 +180,7 @@ describe("device permissions", () => {
       { target: { value: "" } },
     );
     await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Save permissions" })),
+      fireEvent.click(screen.getByRole("button", { name: "Save settings" })),
     );
     expect(settings).toHaveBeenCalledWith(
       "home-1",
@@ -204,7 +204,7 @@ describe("device permissions", () => {
       />,
     );
     const all = screen.getByRole("checkbox", {
-      name: "Allow all current supported devices",
+      name: "Allow all current devices",
     }) as HTMLInputElement;
     expect(all.checked).toBe(true);
     fireEvent.click(all);
@@ -214,11 +214,11 @@ describe("device permissions", () => {
     ).toBe(false);
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: "Also allow supported devices added in the future",
+        name: "Allow future devices",
       }),
     );
     await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Save permissions" })),
+      fireEvent.click(screen.getByRole("button", { name: "Save settings" })),
     );
     expect(settings).toHaveBeenCalledWith(
       "home-1",
@@ -243,11 +243,11 @@ describe("device permissions", () => {
       />,
     );
     const all = screen.getByRole("checkbox", {
-      name: "Allow all current supported devices",
+      name: "Allow all current devices",
     }) as HTMLInputElement;
     expect(all.indeterminate).toBe(true);
     await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Save permissions" })),
+      fireEvent.click(screen.getByRole("button", { name: "Save settings" })),
     );
     expect(settings).toHaveBeenCalledWith(
       "home-1",

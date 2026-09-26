@@ -30,8 +30,7 @@ public signing keys, issuer, expiry and authorized origin.
 1. Sign in through Clerk, then choose **Connect a home**.
 2. Enter your Home Assistant address.
 3. Authorize in Home Assistant. The browser returns to Base Layer.
-4. In **Device settings**, choose **Use a whole-house meter** or **Add up device
-   power readings**. Similar device/sensor names are suggested for review;
+4. In **Device settings**, choose **Whole-house meter** or **Sum of device readings**. Similar device/sensor names are suggested for review;
    existing assignments are preserved and ambiguous matches stay unselected.
    Select device power sensors and devices allowed to be controlled. **Allow all current devices** and
    **Allow future devices** are independent choices.
@@ -46,7 +45,7 @@ local verification before the plugin folder was removed.
 A power reading of **unknown** is not zero. Devices without meters can still be
 controlled if permitted, but are not ranked in power-saving recommendations.
 
-In **Recent activity**, use **Revoke command** to cancel pending, retrying, or
+In **Recent activity**, use **Cancel command** to cancel pending, retrying, or
 verifying commands. This prevents further attempts; it cannot undo a request
 already sent to Home Assistant. Completed command outcomes remain in history.
 **Delete home** opens a separate confirmation before permanently removing the

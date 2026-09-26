@@ -13,7 +13,7 @@ export function UsageOverview({ home }: { home: Home }) {
           <Activity size={16} />{" "}
           {home.powerSource === "deviceSum"
             ? "MONITORED DEVICE USAGE"
-            : "LIVE HOUSEHOLD LOAD"}
+            : "HOUSEHOLD USAGE"}
         </div>
         <div className="usage-value">
           {usage === null ? "—" : (usage / 1000).toFixed(2)} <span>kW</span>
@@ -39,16 +39,15 @@ export function UsageOverview({ home }: { home: Home }) {
             {usage === null
               ? "Waiting for a measurement"
               : home.powerSource === "deviceSum"
-                ? "Sum of mapped device readings"
-                : "Measured by Home Assistant"}
+                ? "Device readings"
+                : "Home Assistant"}
           </span>
-          <strong>11 kW limit</strong>
+          <strong>{formatPower(home.limitWatts)} limit</strong>
         </div>
         {home.powerSource === "deviceSum" && (
           <p className="muted">
             {home.devices.filter((d) => d.powerSensorId).length} of{" "}
-            {home.devices.length} devices mapped · Unmonitored loads are not
-            included.
+            {home.devices.length} devices metered · Other usage excluded.
           </p>
         )}
       </div>
@@ -61,20 +60,17 @@ export function UsageOverview({ home }: { home: Home }) {
           {home.devices.filter((d) => isDeviceRunning(d.state)).length}
           <small> / {home.devices.length}</small>
         </strong>
-        <p>
-          {home.devices.filter((d) => d.allowed).length} devices available to
-          control
-        </p>
+        <p>{home.devices.filter((d) => d.allowed).length} controllable</p>
       </div>
       <div className="card metric-card">
         <span className="metric-icon mint">
           <ArrowDownRight size={23} />
         </span>
-        <span className="eyebrow">AFTER RECOMMENDATIONS</span>
+        <span className="eyebrow">AFTER SUGGESTED SHUTOFFS</span>
         <strong className="projected">
           {formatPower(home.projectedWatts)}
         </strong>
-        <p>Estimated load after suggested shutoffs</p>
+        <p>Estimated usage</p>
       </div>
     </section>
   );

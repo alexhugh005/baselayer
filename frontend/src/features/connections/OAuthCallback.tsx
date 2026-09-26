@@ -12,9 +12,7 @@ export function OAuthCallback({ api }: { api: Api }) {
     const code = params.get("code"),
       state = params.get("state");
     if (!code || !state) {
-      setError(
-        "Authorization was cancelled or the callback is missing required information.",
-      );
+      setError("Authorization is incomplete. Connect your home again.");
       return;
     }
     void api
@@ -28,13 +26,10 @@ export function OAuthCallback({ api }: { api: Api }) {
     <div className="card onboarding">
       <ShieldCheck size={40} />
       <h1>{error ? "Unable to connect" : "Connecting your home…"}</h1>
-      <p>
-        {error ||
-          "Verifying your authorization and discovering devices. Your Home Assistant tokens stay on the server."}
-      </p>
+      <p>{error || "Finding your devices…"}</p>
       {error && (
         <Button onClick={() => window.location.assign("/")}>
-          Return and try again
+          Back to overview
         </Button>
       )}
     </div>
