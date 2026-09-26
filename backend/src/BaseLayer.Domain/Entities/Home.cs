@@ -42,6 +42,8 @@ public static class HouseholdPowerSources
 }
 public sealed class Device
 {
+    public double ThermostatMinF { get; set; } = 66;
+    public double ThermostatMaxF { get; set; } = 80;
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid HomeId
     {

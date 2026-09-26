@@ -6,7 +6,7 @@ using BaseLayer.Application.Interfaces;
 using BaseLayer.Domain.Entities;
 namespace BaseLayer.Application.Services;
 
-public sealed class PlatformService(IPlatformRepository repository, ISmartHomeProvider provider, ICredentialProtector protector, TimeProvider clock, HomeOperationGate operations) : IPlatformService
+public sealed class PlatformService(IPlatformRepository repository, ISmartHomeProvider provider, ICredentialProtector protector, TimeProvider clock, HomeOperationGate operations, IUsageLimitReachedService usageLimitReached) : IPlatformService
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
@@ -21,18 +21,17 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
     private HomeDto ToDto(Home home)
     {
         var online = Fresh(home, Now);
-        var recommendations = new HashSet<string>();
-        var projected = online ? home.HouseholdWatts : null;
-        if (projected >= 11000)
-            foreach (var device in home.Devices.Where(d => d.Allowed && Active(d) && d.PowerWatts > 0).OrderByDescending(d => d.PowerWatts))
-            {
-                recommendations.Add(device.EntityId);
-                projected = Math.Max(0, projected.Value - device.PowerWatts!.Value);
-                if (projected < 11000)
-                    break;
-            }
-        return new(home.Id, home.Name, online, home.Revoked, home.LastSeenUtc, online ? home.HouseholdWatts : null, 11000, projected,
-            home.Devices.Where(d => d.Present).OrderBy(d => d.Name).Select(d => new DeviceDto(d.EntityId, d.Name, online ? d.State : "unavailable", online ? d.PowerWatts : null, d.Allowed, recommendations.Contains(d.EntityId), d.PowerSensorId)).ToList(),
+        const double limitWatts = 11000;
+        var currentWatts = online ? home.HouseholdWatts : null;
+        var actions = currentWatts >= limitWatts
+            ? usageLimitReached.RecommendActions(currentWatts.Value, limitWatts, home.Devices)
+            : [];
+        var recommendations = actions.Select(action => action.EntityId).ToHashSet();
+        var projected = currentWatts is { } watts
+            ? (double?)Math.Max(0, watts - actions.Sum(action => action.PowerWatts))
+            : null;
+        return new(home.Id, home.Name, online, home.Revoked, home.LastSeenUtc, currentWatts, limitWatts, projected,
+            home.Devices.Where(d => d.Present).OrderBy(d => d.Name).Select(d => new DeviceDto(d.EntityId, d.Name, online ? d.State : "unavailable", online ? d.PowerWatts : null, d.Allowed, recommendations.Contains(d.EntityId), d.PowerSensorId, d.ThermostatMinF, d.ThermostatMaxF)).ToList(),
             home.Commands.OrderByDescending(c => c.CreatedUtc).Take(30).Select(Dto).ToList(), home.BaseUrl, home.HouseholdPowerSensorId, home.AllowFutureDevices, Sensors(home), home.PowerSource);
     }
     private static CommandDto Dto(DeviceCommand c) => new(c.Id, c.EntityId, c.Status, c.Attempts, c.CreatedUtc, c.Message);
@@ -91,6 +90,13 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             throw new ArgumentException("The household meter cannot also be mapped to an individual device.");
         if (mapped.Distinct().Count() != mapped.Count)
             throw new ArgumentException("Map a power sensor to only one device to avoid double-counting.");
+        if (request.ThermostatLimits is { } limits)
+            foreach (var (entityId, range) in limits)
+                if (!devices.Contains(entityId) || !entityId.StartsWith("climate.") || range is null ||
+                    !double.IsFinite(range.MinF) || !double.IsFinite(range.MaxF) ||
+                    range.MinF < 10 || range.MaxF > 99 || range.MinF != Math.Truncate(range.MinF) ||
+                    range.MaxF != Math.Truncate(range.MaxF) || range.MinF >= range.MaxF)
+                    throw new ArgumentException("Choose a thermostat and two-digit whole temperatures with the minimum below the maximum (°F).");
         home.AllowFutureDevices = request.AllowFutureDevices;
         home.PowerSource = request.PowerSource;
         home.HouseholdPowerSensorId = householdMeter;
@@ -100,6 +106,11 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             device.Allowed = device.Present && (request.AllowAll || request.AllowedEntityIds.Contains(device.EntityId));
             device.PowerSensorId = request.DevicePowerSensors.GetValueOrDefault(device.EntityId);
             device.PowerWatts = null;
+            if (request.ThermostatLimits?.TryGetValue(device.EntityId, out var range) == true)
+            {
+                device.ThermostatMinF = range.MinF;
+                device.ThermostatMaxF = range.MaxF;
+            }
         }
         foreach (var c in home.Commands.Where(c => !CommandPolicy.Terminal(c) && !home.Devices.Any(d => d.EntityId == c.EntityId && d.Allowed)))
         {
@@ -114,6 +125,8 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
         var home = await Owned(owner, id);
         if (string.IsNullOrWhiteSpace(request.IdempotencyKey) || request.IdempotencyKey.Length > 100 || request.EntityIds.Count is < 1 or > 100)
             throw new ArgumentException("Invalid command request.");
+        if (request.EntityIds.Any(id => id.StartsWith("climate.")))
+            throw new ArgumentException("Thermostats require temperature adjustments, not shutoff commands.");
         var prior = home.Commands.Where(c => c.IdempotencyKey == request.IdempotencyKey).ToList();
         if (prior.Count > 0)
         {
@@ -232,7 +245,7 @@ public sealed class PlatformService(IPlatformRepository repository, ISmartHomePr
             if (CommandPolicy.Terminal(command))
                 continue;
             var device = home.Devices.SingleOrDefault(d => d.EntityId == command.EntityId && d.Present);
-            if (device is null || !device.Allowed)
+            if (device is null || !device.Allowed || device.EntityId.StartsWith("climate."))
             {
                 command.Status = "Cancelled";
                 command.Message = "Device unavailable or access removed.";

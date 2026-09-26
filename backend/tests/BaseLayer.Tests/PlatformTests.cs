@@ -19,7 +19,7 @@ public sealed class PlatformTests : IDisposable
         db = new(new DbContextOptionsBuilder<PlatformDbContext>().UseSqlite("Data Source=:memory:").Options);
         db.Database.OpenConnection();
         db.Database.EnsureCreated();
-        service = new(new PlatformRepository(db, new DatabaseGate()), provider, new PlainProtector(), clock, new HomeOperationGate());
+        service = new(new PlatformRepository(db, new DatabaseGate()), provider, new PlainProtector(), clock, new HomeOperationGate(), new UsageLimitReachedService());
     }
     private async Task<HomeDto> Connect()
     {
@@ -27,6 +27,27 @@ public sealed class PlatformTests : IDisposable
         return await service.CompleteAsync("alice", new("code", start.State));
     }
     private Task<HomeDto> Allow(HomeDto home, bool future = false) => service.SettingsAsync("alice", home.Id, new(true, future, [], "sensor.total", new() { { "switch.dryer", "sensor.dryer" } }));
+    [Fact]
+    public async Task ThermostatLimitsDefaultPersistAndRejectInvalidRanges()
+    {
+        var home = await Connect();
+        var entity = await db.Homes.Include(h => h.Devices).SingleAsync();
+        entity.Devices.Add(new Device { HomeId = home.Id, EntityId = "climate.room", Name = "Room", Present = true, State = "cool" });
+        await db.SaveChangesAsync();
+        var initial = (await service.HomesAsync("alice"))[0].Devices.Single(d => d.EntityId == "climate.room");
+        Assert.Equal(66, initial.ThermostatMinF);
+        Assert.Equal(80, initial.ThermostatMaxF);
+        var request = new HomeSettingsRequest(true, false, [], null, new(), ThermostatLimits: new() { ["climate.room"] = new(67, 79) });
+        await service.SettingsAsync("alice", home.Id, request);
+        db.ChangeTracker.Clear();
+        var saved = (await service.HomesAsync("alice"))[0].Devices.Single(d => d.EntityId == "climate.room");
+        Assert.Equal(67, saved.ThermostatMinF);
+        Assert.Equal(79, saved.ThermostatMaxF);
+        foreach (var range in new[] { new ThermostatLimits(80, 66), new ThermostatLimits(70, 70), new ThermostatLimits(double.NaN, 80) })
+            await Assert.ThrowsAsync<ArgumentException>(() => service.SettingsAsync("alice", home.Id, request with { ThermostatLimits = new() { ["climate.room"] = range } }));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.TurnOffAsync("alice", home.Id, new(["climate.room"], "thermostat")));
+        Assert.Empty((await service.HomesAsync("alice"))[0].Commands);
+    }
     [Fact]
     public async Task OAuthStateIsOwnerBoundAndSingleUse()
     {
@@ -120,6 +141,51 @@ public sealed class PlatformTests : IDisposable
         Assert.Equal(13000, home.HouseholdWatts);
         Assert.True(home.Devices[0].Recommended);
         Assert.Equal(0, provider.Sends);
+    }
+    [Fact]
+    public async Task ReachedLimitDelegatesRecommendationsAndOfflineReadingsDoNot()
+    {
+        var home = await Connect();
+        await Allow(home);
+        await service.PollAsync(home.Id);
+        var recommender = new RecordingUsageLimitService();
+        var platform = new PlatformService(new PlatformRepository(db, new DatabaseGate()), provider,
+            new PlainProtector(), clock, new HomeOperationGate(), recommender);
+        var result = (await platform.HomesAsync("alice"))[0];
+        Assert.Equal(1, recommender.Calls);
+        Assert.Equal(13000, recommender.CurrentWatts);
+        Assert.Equal(11000, recommender.LimitWatts);
+        Assert.True(result.Devices.Single().Recommended);
+        Assert.Equal(8000, result.ProjectedWatts);
+        Assert.Equal(0, provider.Sends);
+
+        var entity = await db.Homes.SingleAsync();
+        entity.HouseholdWatts = 10999;
+        result = (await platform.HomesAsync("alice"))[0];
+        Assert.Equal(1, recommender.Calls);
+        Assert.False(result.Devices.Single().Recommended);
+        Assert.Equal(10999, result.ProjectedWatts);
+
+        entity.HouseholdWatts = 11000;
+        await platform.HomesAsync("alice");
+        Assert.Equal(2, recommender.Calls);
+        clock.Advance(21);
+        result = (await platform.HomesAsync("alice"))[0];
+        Assert.Equal(2, recommender.Calls);
+        Assert.False(result.Devices.Single().Recommended);
+        Assert.Null(result.ProjectedWatts);
+    }
+    private sealed class RecordingUsageLimitService : IUsageLimitReachedService
+    {
+        public int Calls;
+        public double CurrentWatts, LimitWatts;
+        public IReadOnlyList<TurnOffRecommendation> RecommendActions(double currentWatts, double limitWatts, IEnumerable<Device> devices)
+        {
+            Calls++;
+            CurrentWatts = currentWatts;
+            LimitWatts = limitWatts;
+            return [new("switch.dryer", 5000)];
+        }
     }
     [Fact]
     public async Task PermissionRemovalCancelsPendingCommand()
@@ -228,6 +294,8 @@ public sealed class PlatformTests : IDisposable
         await Allow(home);
         await service.TurnOffAsync("alice", home.Id, new(["switch.dryer"], "schema-upgrade"));
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes DROP COLUMN PowerSource");
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN ThermostatMinF");
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device DROP COLUMN ThermostatMaxF");
         db.ChangeTracker.Clear();
         await DatabaseInitializer.InitializeAsync(db);
         await DatabaseInitializer.InitializeAsync(db);
@@ -236,6 +304,8 @@ public sealed class PlatformTests : IDisposable
         Assert.Equal("alice", preserved.OwnerId);
         Assert.NotNull(preserved.ProtectedTokens);
         Assert.Equal("sensor.total", preserved.HouseholdPowerSensorId);
+        Assert.Equal(66, preserved.Devices.Single().ThermostatMinF);
+        Assert.Equal(80, preserved.Devices.Single().ThermostatMaxF);
         Assert.True(preserved.Devices.Single().Allowed);
         Assert.Equal("sensor.dryer", preserved.Devices.Single().PowerSensorId);
         Assert.Equal("schema-upgrade", preserved.Commands.Single().IdempotencyKey);
@@ -375,7 +445,7 @@ public sealed class PlatformTests : IDisposable
         PlatformDbContext NewContext() => new(new DbContextOptionsBuilder<PlatformDbContext>()
             .UseSqlite(db.Database.GetDbConnection()).Options);
         PlatformService NewService(PlatformDbContext context) => new(new PlatformRepository(context, databaseGate),
-            provider, new PlainProtector(), clock, gate);
+            provider, new PlainProtector(), clock, gate, new UsageLimitReachedService());
         using (var request = NewContext())
         {
             var commands = await NewService(request).TurnOffAsync("alice", home.Id, new(["switch.dryer"], "scoped"));

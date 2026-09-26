@@ -59,6 +59,7 @@ builder.Services.AddSingleton<DatabaseGate>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPlatformRepository, PlatformRepository>();
 builder.Services.AddScoped<IPlatformService, PlatformService>();
+builder.Services.AddSingleton<IUsageLimitReachedService, UsageLimitReachedService>();
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("data/keys")).SetApplicationName("BaseLayer");
 builder.Services.AddSingleton<ICredentialProtector, CredentialProtector>();
 builder.Services.AddHttpClient<ISmartHomeProvider, HomeAssistantProvider>(client => client.Timeout = TimeSpan.FromSeconds(10)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
