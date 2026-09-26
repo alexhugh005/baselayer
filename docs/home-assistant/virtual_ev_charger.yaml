@@ -1,0 +1,72 @@
+# Home Assistant package: simulated 240 V, single-phase EV charger.
+# No hardware or cloud account required. Charging starts paused.
+input_boolean:
+  virtual_ev_plugged_in:
+    name: Virtual EV plugged in
+    icon: mdi:ev-plug-type1
+    initial: true
+  virtual_ev_charging_enabled:
+    name: Virtual EV charging enabled
+    initial: false
+input_number:
+  virtual_ev_current_limit:
+    name: Virtual EV current limit
+    icon: mdi:current-ac
+    min: 6
+    max: 48
+    step: 1
+    initial: 32
+    unit_of_measurement: A
+    mode: slider
+template:
+  - switch:
+      - name: Virtual EV Charger
+        unique_id: energy_lab_ev_charger
+        icon: mdi:ev-station
+        state: "{{ is_state('input_boolean.virtual_ev_charging_enabled', 'on') }}"
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.virtual_ev_charging_enabled
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.virtual_ev_charging_enabled
+  - binary_sensor:
+      - name: Virtual EV Connected
+        unique_id: energy_lab_ev_connected
+        device_class: plug
+        state: "{{ is_state('input_boolean.virtual_ev_plugged_in', 'on') }}"
+  - sensor:
+      - name: Virtual EV Charger Status
+        unique_id: energy_lab_ev_status
+        icon: mdi:ev-station
+        state: >-
+          {% if not is_state('input_boolean.virtual_ev_plugged_in', 'on') %}
+            Disconnected
+          {% elif is_state('input_boolean.virtual_ev_charging_enabled', 'on') %}
+            Charging
+          {% else %}
+            Paused
+          {% endif %}
+      - name: Virtual EV Charger Power
+        unique_id: energy_lab_ev_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        availability: "{{ is_number(states('input_number.virtual_ev_current_limit')) and states('input_boolean.virtual_ev_plugged_in') in ['on', 'off'] and states('input_boolean.virtual_ev_charging_enabled') in ['on', 'off'] }}"
+        state: >-
+          {{ (240 * states('input_number.virtual_ev_current_limit') | float(0)) | round(0)
+             if is_state('input_boolean.virtual_ev_plugged_in', 'on')
+             and is_state('input_boolean.virtual_ev_charging_enabled', 'on') else 0 }}
+sensor:
+  - platform: integration
+    source: sensor.virtual_ev_charger_power
+    name: Virtual EV Charger Energy
+    unique_id: energy_lab_ev_energy
+    unit_prefix: k
+    unit_time: h
+    method: left
+    round: 5
+    max_sub_interval:
+      seconds: 30
