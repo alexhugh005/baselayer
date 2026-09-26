@@ -13,12 +13,13 @@ from ercot.client import (
     ErcotHttpError,
     PublicApi,
     load_config,
+    safe_filename,
 )
-from ercot.dashboards import DashboardClient
+from ercot.dashboards import DASHBOARDS, DashboardClient
 
 
 class FakeResponse:
-    def __init__(self, payload, status=200):
+    def __init__(self, payload, status=200, headers=None):
         if isinstance(payload, (dict, list)):
             body = json.dumps(payload).encode("utf-8")
         elif isinstance(payload, str):
@@ -27,6 +28,7 @@ class FakeResponse:
             body = payload
         self._body = body
         self.status = status
+        self.headers = headers or {}
 
     def read(self):
         return self._body
@@ -211,6 +213,82 @@ class PublicApiTests(unittest.TestCase):
                 self.api.products_page()
         self.assertEqual(ctx.exception.status, 401)
 
+    def test_safe_filename_strips_directories(self):
+        self.assertEqual(safe_filename("../two.zip"), "two.zip")
+        self.assertEqual(safe_filename(""), "download.bin")
+
+    def test_download_artifact_writes_content_disposition_name(self):
+        def fake_urlopen(request, timeout=None):
+            if "b2clogin.com" in request.full_url:
+                return FakeResponse({"id_token": "t", "expires_in": "3600"})
+            self.assertIn("/api/public-reports/np4-188-cd/spp?", request.full_url)
+            self.assertIn("download=csv", request.full_url)
+            return FakeResponse(
+                b"a,b\n1,2\n",
+                headers={"Content-Disposition": 'attachment; filename="spp.csv"'},
+            )
+
+        with TemporaryDirectory() as tmp:
+            with patch("ercot.client.urlopen", fake_urlopen):
+                path = self.api.download_artifact("NP4-188-CD", "spp", tmp)
+            self.assertEqual(path.name, "spp.csv")
+            self.assertEqual(path.read_bytes(), b"a,b\n1,2\n")
+            self.assertEqual(path.parent, Path(tmp) / "np4-188-cd")
+
+    def test_download_archive_follows_pages_and_skips_existing(self):
+        pages = {
+            1: {
+                "archives": [
+                    {
+                        "docId": 1,
+                        "friendlyName": "one.zip",
+                        "_links": {
+                            "endpoint": {
+                                "href": "https://api.ercot.com/api/public-reports/archive/np3-233-cd/1"
+                            }
+                        },
+                    }
+                ],
+                "_meta": {"totalPages": 2},
+            },
+            2: {
+                "archives": [
+                    {
+                        "docId": 2,
+                        "friendlyName": "../two.zip",
+                        "_links": {
+                            "endpoint": {
+                                "href": "https://api.ercot.com/api/public-reports/archive/np3-233-cd/2"
+                            }
+                        },
+                    }
+                ],
+                "_meta": {"totalPages": 2},
+            },
+        }
+        calls = []
+
+        def fake_urlopen(request, timeout=None):
+            if "b2clogin.com" in request.full_url:
+                return FakeResponse({"id_token": "t", "expires_in": "3600"})
+            calls.append(request.full_url)
+            if request.full_url.endswith("/1"):
+                return FakeResponse(b"one", headers={"Content-Disposition": "attachment; filename=one.zip"})
+            if request.full_url.endswith("/2"):
+                return FakeResponse(b"two")
+            page = 2 if "page=2" in request.full_url else 1
+            return FakeResponse(pages[page])
+
+        with TemporaryDirectory() as tmp:
+            with patch("ercot.client.urlopen", fake_urlopen):
+                paths = self.api.download_archive("NP3-233-CD", tmp, pause_seconds=0)
+                again = self.api.download_archive("NP3-233-CD", tmp, pause_seconds=0)
+            self.assertEqual([path.name for path in paths], ["one.zip", "two.zip"])
+            self.assertEqual((Path(tmp) / "np3-233-cd" / "two.zip").read_bytes(), b"two")
+            self.assertEqual(paths, again)
+        file_gets = [url for url in calls if url.rstrip("/").endswith(("/1", "/2"))]
+        self.assertEqual(len(file_gets), 2)
+
 
 class DashboardTests(unittest.TestCase):
     def test_named_feed_url_and_alias(self):
@@ -281,6 +359,19 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(status["realTimeSpp"]["hbHubAvg"], 44.85)
         self.assertEqual(status["supplyDemand"]["demandMw"], 63000)
         self.assertEqual(status["energyStorage"]["netOutputMw"], -300)
+
+    def test_save_datasets_writes_each_feed(self):
+        def fake_urlopen(request, timeout=None):
+            return FakeResponse({"lastUpdated": "now"})
+
+        with TemporaryDirectory() as tmp:
+            with patch("ercot.client.urlopen", fake_urlopen):
+                paths = DashboardClient().save_datasets(tmp)
+            names = {path.name for path in paths}
+            self.assertEqual(len(paths), len(DASHBOARDS) + 1)
+            self.assertIn("grid-status.json", names)
+            self.assertIn("prices.json", names)
+            self.assertTrue((Path(tmp) / "dashboards" / "storage.json").is_file())
 
 
 @unittest.skipUnless(os.environ.get("ERCOT_LIVE") == "1", "set ERCOT_LIVE=1")

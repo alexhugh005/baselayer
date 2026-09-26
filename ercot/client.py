@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import unquote, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 TOKEN_URL = (
@@ -100,7 +101,8 @@ def _json_body(raw):
         return raw.decode("utf-8", "replace")
 
 
-def http_json(method, url, headers=None, data=None, timeout=DEFAULT_TIMEOUT):
+def http_exchange(method, url, headers=None, data=None, timeout=DEFAULT_TIMEOUT):
+    """Return status, lower-cased headers, and the raw body."""
     request_headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     if headers:
         request_headers.update(headers)
@@ -110,6 +112,7 @@ def http_json(method, url, headers=None, data=None, timeout=DEFAULT_TIMEOUT):
         with urlopen(request, timeout=timeout) as response:
             raw = response.read()
             status = getattr(response, "status", 200)
+            response_headers = {key.lower(): value for key, value in response.headers.items()}
     except HTTPError as exc:
         raw = exc.read()
         parsed = _json_body(raw)
@@ -125,10 +128,61 @@ def http_json(method, url, headers=None, data=None, timeout=DEFAULT_TIMEOUT):
         raise ErcotHttpError(exc.code, message, parsed) from exc
     except URLError as exc:
         raise ErcotError(f"request failed: {exc.reason}") from exc
-    parsed = _json_body(raw)
     if status >= 400:
-        raise ErcotHttpError(status, "request failed", parsed)
-    return parsed
+        raise ErcotHttpError(status, "request failed", _json_body(raw))
+    return status, response_headers, raw
+
+
+def http_json(method, url, headers=None, data=None, timeout=DEFAULT_TIMEOUT):
+    _status, _headers, raw = http_exchange(
+        method, url, headers=headers, data=data, timeout=timeout
+    )
+    return _json_body(raw)
+
+
+_FILENAME_STAR = re.compile(r"filename\*\s*=\s*(?:UTF-8''|utf-8'')([^;]+)", re.I)
+_FILENAME = re.compile(r'filename\s*=\s*"?([^";]+)"?', re.I)
+
+
+def filename_from_content_disposition(header):
+    if not header:
+        return None
+    match = _FILENAME_STAR.search(header)
+    if match:
+        return unquote(match.group(1).strip().strip('"'))
+    match = _FILENAME.search(header)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def safe_filename(name, fallback="download.bin"):
+    """Keep a server-supplied name inside one directory."""
+    text = str(name or "").replace("\\", "/").split("/")[-1].strip().strip('"').strip("'")
+    cleaned = "".join(ch for ch in text if ch.isprintable() and ch not in '<>:"|?*')
+    cleaned = cleaned.strip().strip(".")
+    if not cleaned or cleaned in {".", ".."}:
+        return fallback
+    return cleaned
+
+
+def write_json(path, payload):
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(payload, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    return destination
+
+
+def with_query(url, params):
+    if not params:
+        return url
+    query = urlencode({key: value for key, value in params.items() if value is not None})
+    parts = urlsplit(url)
+    joined = "&".join(item for item in (parts.query, query) if item)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, joined, parts.fragment))
 
 
 class PublicApi:
@@ -220,29 +274,168 @@ class PublicApi:
             return path
         return urljoin(self.api_base + "/", path.lstrip("/"))
 
-    def request(self, path, params=None):
-        url = self._url(path)
-        if params:
-            query = urlencode(
-                {key: value for key, value in params.items() if value is not None}
-            )
-            parts = urlsplit(url)
-            joined = "&".join(item for item in (parts.query, query) if item)
-            url = urlunsplit((parts.scheme, parts.netloc, parts.path, joined, parts.fragment))
+    def _auth_headers(self, extra=None):
         headers = {
             "Authorization": f"Bearer {self.id_token()}",
             "Ocp-Apim-Subscription-Key": self.subscription_key,
         }
+        if extra:
+            headers.update(extra)
+        return headers
+
+    def _reraise(self, exc):
+        if exc.status == 429:
+            raise ErcotHttpError(
+                429,
+                "rate limited (ERCOT allows 30 requests per minute)",
+                exc.body,
+            ) from exc
+        raise exc
+
+    def request(self, path, params=None):
+        url = with_query(self._url(path), params)
         try:
-            return http_json("GET", url, headers=headers, timeout=self.timeout)
+            return http_json("GET", url, headers=self._auth_headers(), timeout=self.timeout)
         except ErcotHttpError as exc:
-            if exc.status == 429:
-                raise ErcotHttpError(
-                    429,
-                    "rate limited (ERCOT allows 30 requests per minute)",
-                    exc.body,
-                ) from exc
-            raise
+            self._reraise(exc)
+
+    def request_bytes(self, path, params=None, method="GET", data=None, headers=None):
+        """GET or POST a file endpoint and return headers plus raw bytes."""
+        extra = {"Accept": "*/*"}
+        if headers:
+            extra.update(headers)
+        url = with_query(self._url(path), params)
+        try:
+            _status, response_headers, raw = http_exchange(
+                method,
+                url,
+                headers=self._auth_headers(extra),
+                data=data,
+                timeout=self.timeout,
+            )
+        except ErcotHttpError as exc:
+            self._reraise(exc)
+        return response_headers, raw
+
+    def save_bytes(
+        self,
+        path,
+        directory,
+        filename=None,
+        params=None,
+        method="GET",
+        data=None,
+        headers=None,
+        skip_existing=False,
+    ):
+        """Write one API file under `directory` and return its path."""
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        preferred = safe_filename(filename) if filename else None
+        if skip_existing and preferred is not None:
+            existing = directory / preferred
+            if existing.is_file():
+                return existing
+        response_headers, raw = self.request_bytes(
+            path, params=params, method=method, data=data, headers=headers
+        )
+        header_name = filename_from_content_disposition(
+            response_headers.get("content-disposition")
+        )
+        tail = urlsplit(self._url(path)).path.rstrip("/").split("/")[-1]
+        name = safe_filename(header_name or preferred or tail)
+        destination = (directory / name).resolve()
+        if destination.parent != directory.resolve():
+            raise ErcotError(f"refusing to write outside {directory}")
+        destination.write_bytes(raw)
+        return destination
+
+    def download_artifact(
+        self,
+        emil_id,
+        artifact,
+        directory,
+        file_format="csv",
+        skip_existing=False,
+        **params,
+    ):
+        """Save one EMIL artifact. `file_format` is `csv` or `json`."""
+        emil = self.emil_path(emil_id)
+        name = str(artifact).strip().strip("/")
+        query = dict(params)
+        query["download"] = file_format
+        return self.save_bytes(
+            f"/api/public-reports/{emil}/{name}",
+            Path(directory) / emil,
+            filename=f"{name}.{file_format}",
+            params=query,
+            skip_existing=skip_existing,
+        )
+
+    def iter_archive(self, emil_id, **params):
+        """Yield archive documents, following `_meta.totalPages`."""
+        page = int(params.pop("page", 1) or 1)
+        size = int(params.pop("size", 200) or 200)
+        seen = set()
+        while True:
+            payload = self.archive(emil_id, page=page, size=size, **params)
+            records = payload.get("archives") if isinstance(payload, dict) else None
+            if not isinstance(records, list) or not records:
+                break
+            fresh = []
+            for record in records:
+                doc_id = record.get("docId")
+                key = doc_id if doc_id is not None else (
+                    record.get("friendlyName"),
+                    record.get("postDatetime"),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                fresh.append(record)
+            if not fresh:
+                break
+            yield from fresh
+            meta = payload.get("_meta") or {}
+            total_pages = meta.get("totalPages")
+            try:
+                total_pages = int(total_pages) if total_pages is not None else None
+            except (TypeError, ValueError):
+                total_pages = None
+            if total_pages is not None and page >= total_pages:
+                break
+            if total_pages is None and len(records) < size:
+                break
+            page += 1
+
+    def download_archive(
+        self,
+        emil_id,
+        directory,
+        limit=None,
+        pause_seconds=2.0,
+        skip_existing=True,
+        **params,
+    ):
+        """Save posted archive files for one EMIL product.
+
+        ERCOT allows 30 requests per minute, so file downloads are paced.
+        """
+        dest = Path(directory) / self.emil_path(emil_id)
+        saved = []
+        for record in self.iter_archive(emil_id, **params):
+            if limit is not None and len(saved) >= limit:
+                break
+            href = ((record.get("_links") or {}).get("endpoint") or {}).get("href")
+            if not href:
+                continue
+            fallback = record.get("friendlyName") or f"{record.get('docId', 'archive')}.bin"
+            if saved and pause_seconds:
+                time.sleep(pause_seconds)
+            saved.append(
+                self.save_bytes(href, dest, filename=fallback, skip_existing=skip_existing)
+            )
+        return saved
 
     def products_page(self, **params):
         return self.request("/api/public-reports", params=params or None)

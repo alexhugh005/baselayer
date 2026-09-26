@@ -38,7 +38,11 @@ From the repository root. Dashboards need no credentials:
 python3 -m ercot status
 python3 -m ercot dashboard prices
 python3 -m ercot dashboard storage
+python3 -m ercot datasets
 ```
+
+`datasets` writes each live feed to `dataset/dashboards/` and a compact
+snapshot to `dataset/grid-status.json`. That folder is gitignored.
 
 Public Data API (requires `.env`):
 
@@ -49,7 +53,14 @@ python3 -m ercot product NP3-233-CD
 python3 -m ercot data NP3-233-CD hourly_res_outage_cap
 python3 -m ercot archive NP3-233-CD
 python3 -m ercot data NP4-188-CD spp --param deliveryDateFrom=2026-09-01
+python3 -m ercot download NP4-188-CD spp
+python3 -m ercot download NP3-233-CD --limit 5
 ```
+
+`download` with an artifact name saves a CSV (or `--format json`) under
+`dataset/<emil-id>/`. Without an artifact name it saves posted archive
+files for that product, paced to stay under the 30-request-per-minute cap.
+Files that are already present are left in place.
 
 In code:
 

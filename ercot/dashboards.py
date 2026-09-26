@@ -6,7 +6,9 @@ the Public Data API subscription key.
 
 from __future__ import annotations
 
-from .client import http_json
+from pathlib import Path
+
+from .client import http_json, write_json
 
 DASHBOARD_BASE = "https://www.ercot.com/api/1/services/read/dashboards"
 
@@ -119,3 +121,14 @@ class DashboardClient:
                 "netOutputMw": current_storage.get("netOutput"),
             },
         }
+
+    def save_datasets(self, directory):
+        """Write each live dashboard feed and a grid snapshot under `directory`."""
+        directory = Path(directory)
+        written = []
+        for name in DASHBOARDS:
+            written.append(
+                write_json(directory / "dashboards" / f"{name}.json", self.get(name))
+            )
+        written.append(write_json(directory / "grid-status.json", self.grid_status()))
+        return written

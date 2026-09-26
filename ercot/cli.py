@@ -35,6 +35,25 @@ def main(argv=None):
     sub.add_parser("status", help="grid condition, prices, supply, and storage snapshot")
     dash = sub.add_parser("dashboard", help="fetch a public dashboard JSON feed")
     dash.add_argument("name", choices=sorted(DASHBOARDS), help="dashboard alias")
+    datasets = sub.add_parser(
+        "datasets",
+        help="save live dashboard JSON into the dataset folder",
+    )
+    datasets.add_argument("--out", default="dataset", help="output directory (default: dataset)")
+    download = sub.add_parser(
+        "download",
+        help="download a Public Data API artifact or archive into the dataset folder",
+    )
+    download.add_argument("emil_id")
+    download.add_argument(
+        "artifact",
+        nargs="?",
+        help="artifact name; omit to download posted archive files",
+    )
+    download.add_argument("--out", default="dataset", help="output directory (default: dataset)")
+    download.add_argument("--format", default="csv", choices=("csv", "json"))
+    download.add_argument("--limit", type=int, default=None, help="max archive files")
+    download.add_argument("--param", action="append", default=[], help="query parameter key=value")
 
     sub.add_parser("token", help="obtain a Public Data API id_token (requires credentials)")
     sub.add_parser("products", help="list EMIL products from the Public Data API")
@@ -56,6 +75,10 @@ def main(argv=None):
         if args.command == "dashboard":
             _print(DashboardClient().get(args.name))
             return 0
+        if args.command == "datasets":
+            paths = DashboardClient().save_datasets(args.out)
+            _print({"directory": args.out, "files": [str(path) for path in paths]})
+            return 0
 
         api = PublicApi.from_env()
         if args.command == "token":
@@ -73,6 +96,25 @@ def main(argv=None):
             return 0
         if args.command == "archive":
             _print(api.archive(args.emil_id, **_parse_params(args.param)))
+            return 0
+        if args.command == "download":
+            if args.artifact:
+                path = api.download_artifact(
+                    args.emil_id,
+                    args.artifact,
+                    args.out,
+                    file_format=args.format,
+                    **_parse_params(args.param),
+                )
+                _print({"file": str(path)})
+            else:
+                paths = api.download_archive(
+                    args.emil_id,
+                    args.out,
+                    limit=args.limit,
+                    **_parse_params(args.param),
+                )
+                _print({"files": [str(path) for path in paths]})
             return 0
     except ErcotError as exc:
         print(f"error: {exc}", file=sys.stderr)
