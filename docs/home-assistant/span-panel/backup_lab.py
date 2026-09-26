@@ -71,7 +71,9 @@ def install_backup(lab, relays):
                           action('switch.turn_off', '{{ relays[circuit] }}'), {'stop': 'Backup capacity or supply unavailable'}]},
                 action('input_boolean.turn_on', "{{ 'input_boolean.lab_span_backup_' ~ circuit }}"),
                 action('select.select_option', '{{ priorities[circuit] }}', option='never') ]},
-            action('switch.turn_on', '{{ relays[circuit] }}'),
+            {'delay': {'seconds': 2.5}},
+            {'if': [{'condition': 'template', 'value_template': "{{ not is_state(relays[circuit], 'on') }}"}],
+             'then': [action('switch.turn_on', '{{ relays[circuit] }}')]},
             {'delay': {'seconds': 3}},
             {'if': [{'condition': 'template', 'value_template': "{{ not is_state(relays[circuit], 'on') }}"}],
              'then': [action('input_boolean.turn_off', "{{ 'input_boolean.lab_span_backup_' ~ circuit }}"),
@@ -87,7 +89,7 @@ def install_backup(lab, relays):
             'actions': [{'choose': [
                 {'conditions': "{{ trigger.id == 'off' }}", 'sequence': [action('input_boolean.turn_off', admitted(key))]},
                 {'conditions': "{{ trigger.id == 'on' and not is_state('" + admitted(key) + "', 'on') }}", 'sequence': [action('script.lab_span_backup_restore', circuit=key)]}]}]})
-    entry = [action('input_boolean.turn_off', flags),
+    entry = [action('input_boolean.turn_off', flags), {'delay': {'seconds': 2.5}},
              action('switch.turn_off', list(relays.values()))]
     for key in PEAKS:
         entry.extend([
@@ -100,10 +102,10 @@ def install_backup(lab, relays):
     package['automation'].append({'id': 'lab_span_backup_empty', 'alias': 'Empty or disconnected battery stops backup loads', 'mode': 'restart',
         'triggers': [{'trigger': 'state', 'entity_id': READY, 'from': 'on', 'to': 'off'}],
         'conditions': [{'condition': 'state', 'entity_id': OUTAGE, 'state': 'on'}],
-        'actions': [action('input_boolean.turn_off', flags), action('switch.turn_off', list(relays.values()))]})
+        'actions': [action('input_boolean.turn_off', flags), {'delay': {'seconds': 2.5}}, action('switch.turn_off', list(relays.values()))]})
     package['automation'].append({'id': 'lab_span_backup_end', 'alias': 'Grid restored keeps circuits off until manual restore', 'mode': 'restart',
         'triggers': [{'trigger': 'state', 'entity_id': OUTAGE, 'from': 'on', 'to': 'off'}],
-        'actions': [action('switch.turn_off', list(relays.values())), action('input_boolean.turn_off', flags),
+        'actions': [action('input_boolean.turn_off', flags), {'delay': {'seconds': 2.5}}, action('switch.turn_off', list(relays.values())),
             *[action('select.select_option', priorities[k], option="{% set p = states('input_text.lab_span_saved_priority_" + k + "') %}{{ p if p in ['never','off_grid','soc_threshold'] else 'off_grid' }}") for k in PEAKS], action('homeassistant.save_persistent_states')]})
     # Existing restore-all is explicitly grid-only, so it cannot bypass reservations.
     package['script']['lab_span_restore_supply']['sequence'].insert(0, {'condition': 'state', 'entity_id': OUTAGE, 'state': 'off'})

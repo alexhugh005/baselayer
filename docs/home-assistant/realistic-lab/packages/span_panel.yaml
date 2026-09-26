@@ -1084,6 +1084,8 @@ automation:
       - input_boolean.lab_span_backup_garage
       - input_boolean.lab_span_backup_hvac
       - input_boolean.lab_span_backup_water_heater
+  - delay:
+      seconds: 2.5
   - action: switch.turn_off
     target:
       entity_id:
@@ -1227,6 +1229,8 @@ automation:
   - action: input_boolean.turn_off
     target:
       entity_id: *id001
+  - delay:
+      seconds: 2.5
   - action: switch.turn_off
     target:
       entity_id:
@@ -1247,6 +1251,11 @@ automation:
     from: 'on'
     to: 'off'
   actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id: *id001
+  - delay:
+      seconds: 2.5
   - action: switch.turn_off
     target:
       entity_id:
@@ -1258,9 +1267,6 @@ automation:
       - switch.span_panel_garage_ev_charger_breaker
       - switch.span_panel_central_hvac_breaker
       - switch.span_panel_water_heater_breaker
-  - action: input_boolean.turn_off
-    target:
-      entity_id: *id001
   - action: select.select_option
     target:
       entity_id: select.span_panel_living_room_circuit_priority
@@ -1487,9 +1493,15 @@ script:
           entity_id: '{{ priorities[circuit] }}'
         data:
           option: never
-    - action: switch.turn_on
-      target:
-        entity_id: '{{ relays[circuit] }}'
+    - delay:
+        seconds: 2.5
+    - if:
+      - condition: template
+        value_template: '{{ not is_state(relays[circuit], ''on'') }}'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: '{{ relays[circuit] }}'
     - delay:
         seconds: 3
     - if:
