@@ -58,9 +58,10 @@ public sealed partial class PlatformTests
         entries[0].LastManagedCurrentAmps = 20;
         entries[0].AtFront = true;
         entries[0].PowerOn = false;
-        entries[0].Status = "restoring";
+        entries[0].BeginRestoration();
         entries[0].EligibleSinceUtc = clock.GetUtcNow().UtcDateTime.AddSeconds(-4);
-        entries[1].Status = "failed";
+        entries[1].BeginRestoration();
+        entries[1].FailRestoration();
         entries[2].EstimatedWatts = null;
         await db.SaveChangesAsync();
         var expected = entries.Select(e => new { e.DeviceId, e.QueuedUtc, e.EstimatedWatts, e.TargetCurrentAmps,

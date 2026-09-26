@@ -16,6 +16,10 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
         var restore = b.Entity<RestoreQueueEntry>();
         restore.ToTable("RestoreQueueEntries");
         restore.HasKey(e => e.DeviceId);
+        // Preserve the existing lowercase database values and API contract.
+        restore.Property(e => e.Status).HasConversion(
+            status => status.ToString().ToLowerInvariant(),
+            value => Enum.Parse<RestoreStatus>(value, true));
         restore.Property(e => e.DeviceId).ValueGeneratedNever();
         restore.HasOne(e => e.Device).WithOne(d => d.RestoreEntry)
             .HasForeignKey<RestoreQueueEntry>(e => e.DeviceId).OnDelete(DeleteBehavior.Cascade);

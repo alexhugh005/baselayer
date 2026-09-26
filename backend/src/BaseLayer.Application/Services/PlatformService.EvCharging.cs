@@ -126,8 +126,7 @@ public sealed partial class PlatformService
             command.Message = message;
             if (command.IsRestoration && device.RestoreEntry is { } entry)
             {
-                entry.Status = "waiting";
-                entry.EligibleSinceUtc = null;
+                entry.ResumeWaiting();
             }
         }
         var control = EvControl(home, device);
@@ -144,8 +143,7 @@ public sealed partial class PlatformService
             if (command.Automatic && device.RestoreEntry is { TargetCurrentAmps: not null } entry)
             {
                 entry.LastManagedCurrentAmps = current;
-                entry.Status = "waiting";
-                entry.EligibleSinceUtc = null;
+                entry.ResumeWaiting();
                 if (command.IsRestoration)
                 {
                     home.LastRestoreUtc = Now;
@@ -186,10 +184,10 @@ public sealed partial class PlatformService
                 // Persist the first pre-reduction limit before sending, including ambiguous network failures.
                 // Further reductions must never replace the original compensation target.
                 entry.TargetCurrentAmps ??= current;
-                entry.Status = "waiting";
+                entry.ResumeWaiting();
             }
             entry.LastManagedCurrentAmps = target;
-            entry.EligibleSinceUtc = null;
+            entry.ResetEligibility();
             if (command.IsRestoration) home.LastRestoreUtc = Now;
         }
         command.Attempts++;
