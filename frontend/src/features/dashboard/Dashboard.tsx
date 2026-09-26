@@ -1,3 +1,4 @@
+import { Select } from "../../components/ui/Select";
 import { useRef, useState } from "react";
 import {
   ArrowUpRight,
@@ -277,7 +278,7 @@ export function Dashboard({
           <div className="home-bar">
             <div className="home-picker">
               <House size={19} />
-              <select
+              <Select
                 aria-label="Selected home"
                 value={home.id}
                 onChange={(e) => setActive(e.target.value)}
@@ -288,7 +289,7 @@ export function Dashboard({
                     {h.revoked ? " (disconnected)" : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <span className="muted">
               {home.lastSeenUtc

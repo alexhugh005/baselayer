@@ -1,3 +1,4 @@
+import { Select } from "../../components/ui/Select";
 import { Info } from "lucide-react";
 import { useState } from "react";
 import type { Api } from "../../lib/api";
@@ -152,7 +153,7 @@ export function DeviceSettings({
         <div id="whole-home-meter" hidden={powerSource !== "wholeHouseMeter"}>
           <label className="field">
             Whole-home power sensor
-            <select
+            <Select
               value={meter}
               onChange={(e) => {
                 const next = e.target.value;
@@ -173,7 +174,7 @@ export function DeviceSettings({
                   {sensor.name} ({sensor.unit})
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
       </section>
@@ -257,7 +258,7 @@ export function DeviceSettings({
                   <span>{d.name}</span>
                 </th>
                 <td role="cell" data-label="Power sensor">
-                  <select
+                  <Select
                     aria-label={`${d.name} power sensor`}
                     value={mapping[d.entityId] ?? ""}
                     onChange={(e) =>
@@ -290,7 +291,7 @@ export function DeviceSettings({
                           {s.name} ({s.unit})
                         </option>
                       ))}
-                  </select>
+                  </Select>
                   {!d.powerSensorId &&
                     mapping[d.entityId] &&
                     mapping[d.entityId] === suggestions[d.entityId] && (
@@ -301,7 +302,7 @@ export function DeviceSettings({
                       <legend>EV charging</legend>
                       <label className="field">
                         Charging current control
-                        <select
+                        <Select
                           aria-label={`${d.name} EV current control`}
                           value={evCharging[d.entityId]?.currentEntityId ?? ""}
                           onChange={(e) =>
@@ -345,7 +346,7 @@ export function DeviceSettings({
                               {c.name} ({c.min}–{c.max} A)
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </label>
                       {evCharging[d.entityId] && (
                         <label className="field">
@@ -415,7 +416,7 @@ export function DeviceSettings({
                   className="shutoff-cell"
                   data-label="Smart Shutoff"
                 >
-                  <select
+                  <Select
                     aria-label={`${d.name} Smart Shutoff`}
                     value={levels[d.entityId]}
                     onChange={(e) =>
@@ -433,7 +434,7 @@ export function DeviceSettings({
                     >
                       Anytime
                     </option>
-                  </select>
+                  </Select>
                   {d.entityId.startsWith("climate.") && (
                     <small className="muted">Temperature control only</small>
                   )}

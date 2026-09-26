@@ -1,3 +1,4 @@
+import { Select } from "../../components/ui/Select";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   BatteryMedium,
@@ -57,7 +58,7 @@ export function SmartUsage({ api }: { api: Api }) {
         <>
           <label className="smart-home-picker">
             Home
-            <select
+            <Select
               aria-label="Selected home"
               value={home.id}
               onChange={(event) => setActive(event.target.value)}
@@ -68,7 +69,7 @@ export function SmartUsage({ api }: { api: Api }) {
                   {item.revoked ? " (disconnected)" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <UsagePlanner
             key={home.id}

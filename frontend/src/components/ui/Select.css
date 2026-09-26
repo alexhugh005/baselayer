@@ -1,0 +1,29 @@
+.select-control {
+  appearance: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  /* Reserve space for the 16px arrow, its inset, and a 12px text gap. */
+  padding: 12px 44px 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--terminal);
+  background-color: var(--white);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23292826' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
+  font-size: 16px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+
+.select-control:hover:not(:disabled) {
+  border-color: var(--secondary);
+}
+
+.select-control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

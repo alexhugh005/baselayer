@@ -1,3 +1,4 @@
+import { Select } from "../../components/ui/Select";
 import { useId, useRef, useState } from "react";
 import {
   CircuitBoard,
@@ -61,7 +62,7 @@ export function SmartPanel({ api }: { api: Api }) {
         <>
           <label className="smart-home-picker">
             Home
-            <select
+            <Select
               aria-label="Selected home"
               value={home.id}
               onChange={(event) => setActive(event.target.value)}
@@ -72,7 +73,7 @@ export function SmartPanel({ api }: { api: Api }) {
                   {item.revoked ? " (disconnected)" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <CircuitPanel
             key={home.id}
@@ -315,7 +316,7 @@ function CircuitRow({
       </div>
       <label className="circuit-outage-setting">
         <span>When the grid goes down</span>
-        <select
+        <Select
           aria-label={`${name} grid outage setting`}
           aria-describedby={showOutageWarning ? outageWarningId : undefined}
           value={offline ? "" : (priority?.priority ?? "")}
@@ -332,7 +333,7 @@ function CircuitRow({
               {priorityLabels[option]}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {showOutageWarning && (
         <div

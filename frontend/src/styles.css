@@ -267,13 +267,14 @@ main {
 }
 .home-picker select {
   border: 0;
-  background: transparent;
+  background-color: transparent;
   color: var(--grounded);
   font-size: 18px;
   font-weight: 600;
   max-width: 280px;
   min-height: 44px;
-  padding: 8px 24px 8px 0;
+  padding-block: 8px;
+  padding-left: 0;
   text-overflow: ellipsis;
 }
 .badge {
@@ -894,9 +895,7 @@ input[type="radio"] {
   margin: 24px 0;
   color: var(--terminal);
 }
-.field input,
-.field select,
-.mapping-row select {
+.field input {
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -910,9 +909,7 @@ input[type="radio"] {
   font-weight: 400;
   text-overflow: ellipsis;
 }
-.field input:hover,
-.field select:hover,
-.mapping-row select:hover {
+.field input:hover {
   border-color: var(--secondary);
 }
 .field input::placeholder {
@@ -1995,7 +1992,7 @@ dialog p.error {
   width: 28%;
 }
 .device-settings-table .shutoff-cell {
-  width: 150px;
+  width: 180px;
   text-align: center;
 }
 .device-settings-table small {
@@ -2003,18 +2000,6 @@ dialog p.error {
   margin-top: 6px;
   font-size: 12px;
   font-weight: 400;
-}
-.device-settings-table select {
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--terminal);
-  background: var(--white);
-  font-size: 16px;
-  text-overflow: ellipsis;
 }
 .device-settings-table .shutoff-checkbox {
   display: flex;
@@ -2060,9 +2045,6 @@ dialog p.error {
   .device-settings-table th:first-child {
     width: 30%;
   }
-  .device-settings-table select {
-    padding: 8px 4px;
-  }
 }
 .device-settings > .modal-scroll-content > .field {
   margin: 16px 0;
@@ -2070,19 +2052,7 @@ dialog p.error {
 .device-settings > .modal-scroll-content > p {
   margin: 10px 0;
 }
-.device-settings select {
-  appearance: none;
-  padding-right: 44px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23292826' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 16px center;
-  background-size: 16px;
-}
 
-.device-settings-table .shutoff-cell select {
-  padding-right: 24px;
-  background-position: right 7px center;
-}
 @media (max-width: 520px) {
   .device-settings-table th:first-child {
     width: 23%;
@@ -2216,16 +2186,7 @@ dialog p.error {
   color: var(--secondary);
 }
 .smart-home-picker select {
-  min-width: 0;
   width: min(100%, 320px);
-  min-height: 48px;
-  max-width: 100%;
-  padding: 12px 16px;
-  color: var(--terminal);
-  font-size: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--white);
 }
 .smart-summary {
   display: grid;
@@ -2700,19 +2661,8 @@ dialog p.error {
   color: #68665f;
 }
 .circuit-outage-setting select {
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--white);
   color: var(--grounded);
   font-size: 14px;
-}
-.circuit-outage-setting select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 .circuit-outage-warning {
   display: flex;
@@ -3071,12 +3021,6 @@ dialog p.error {
     color: var(--secondary);
     font-size: 14px;
     font-weight: 500;
-  }
-  .device-settings-table select,
-  .device-settings-table .shutoff-cell select {
-    min-height: 48px;
-    padding: 12px 36px 12px 12px;
-    background-position: right 12px center;
   }
   .temperature-limit-fields {
     display: grid;
