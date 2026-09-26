@@ -5,8 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from ercot.cli import main
-from ercot.outage_rag import (
+from baselayer_data.ercot.cli import main
+from baselayer_data.ercot.outage_rag import (
     _response_text,
     apply_model_likelihoods,
     classify_weather_hour,
@@ -358,7 +358,7 @@ class ForecastTests(unittest.TestCase):
         self.assertLessEqual(float(rows[0]["outage_likelihood"]), 1)
 
     def test_predict_outage_file_runs_the_forecast_command(self):
-        from ercot.predict_outage import ROOT, forecast_arguments, run
+        from baselayer_data.ercot.predict_outage import ROOT, forecast_arguments, run
 
         prices = str(ROOT / "dataset" / "ercot" / "prices" / "rt-prices-2025-08-to-2026-08.csv")
         output = str(ROOT / "dataset" / "ercot" / "outage-forecast-minutes.csv")
@@ -366,7 +366,7 @@ class ForecastTests(unittest.TestCase):
         self.assertEqual(args[args.index("--prices") + 1], prices)
         self.assertEqual(args[args.index("--out") + 1], output)
         self.assertIn("--no-model", args)
-        with patch("ercot.cli.main", return_value=0) as cli_main:
+        with patch("baselayer_data.ercot.cli.main", return_value=0) as cli_main:
             status = run(["--no-model"])
         self.assertEqual(status, 0)
         cli_main.assert_called_once_with(args)
