@@ -1,0 +1,31 @@
+{
+  "title": "Base Layer",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Household power",
+        "description": "Select total household consumption in W or kW. At 11 kW or above, Base Layer turns off the highest-drawing eligible switch and repeats until below 11 kW.",
+        "data": {
+          "household_sensor": "Whole-house power sensor"
+        }
+      },
+      "device": {
+        "title": "Eligible device",
+        "description": "Select a switch Base Layer may turn off and its individual power sensor. Devices stay off until manually restarted.",
+        "data": {
+          "switch": "Switch allowed to turn off",
+          "power_sensor": "Device power sensor",
+          "add_another": "Add another eligible device"
+        }
+      }
+    },
+    "error": {
+      "invalid_power": "Select a power sensor measured in W or kW.",
+      "duplicate_device": "Use a distinct device meter and switch; do not select the household meter.",
+      "invalid_switch": "Select an existing switch."
+    },
+    "abort": {
+      "already_configured": "Base Layer is already configured. Remove it before replacing its device selection."
+    }
+  }
+}

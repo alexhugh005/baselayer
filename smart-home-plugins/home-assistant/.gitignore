@@ -1,0 +1,12 @@
+config/.storage/
+config/.cloud/
+config/*.db*
+config/*.log*
+config/.HA_VERSION
+config/deps/
+config/tts/
+credentials.txt
+__pycache__/
+*.pyc
+config/.cache/
+config/.ha_run.lock

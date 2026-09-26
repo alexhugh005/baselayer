@@ -1,0 +1,22 @@
+{
+  "title": "Energy Guard",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Protect a device",
+        "description": "Turn off the selected switch after it uses MORE than 1 kWh per on-session. Counting starts when added or switched on; switching on again starts a new session. Select a cumulative kWh meter belonging to that switch.",
+        "data": {
+          "energy_sensor": "Cumulative energy sensor (kWh)",
+          "switch": "Switch to turn off"
+        }
+      }
+    },
+    "error": {
+      "invalid_energy": "Select an energy sensor measured in kWh.",
+      "invalid_switch": "Select an existing switch."
+    },
+    "abort": {
+      "already_configured": "This switch is already protected."
+    }
+  }
+}
