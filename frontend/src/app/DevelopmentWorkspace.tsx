@@ -4,6 +4,8 @@ import { createApi } from "../lib/api";
 import { OAuthCallback } from "../features/connections/OAuthCallback";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { Button } from "../components/ui/Button";
+import { SmartPanel } from "../features/smart-panel/SmartPanel";
+import { SmartUsage } from "../features/smart-usage/SmartUsage";
 export function DevelopmentWorkspace() {
   const [token, setToken] = useState(
       () => sessionStorage.getItem("base-layer-demo") ?? "",
@@ -27,6 +29,10 @@ export function DevelopmentWorkspace() {
           </div>
           {window.location.pathname === "/oauth/home-assistant" ? (
             <OAuthCallback api={api} />
+          ) : window.location.pathname === "/smart-panel" ? (
+            <SmartPanel api={api} />
+          ) : window.location.pathname === "/smart-usage" ? (
+            <SmartUsage api={api} />
           ) : (
             <Dashboard api={api} />
           )}

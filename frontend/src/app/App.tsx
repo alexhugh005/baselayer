@@ -6,6 +6,8 @@ import { OAuthCallback } from "../features/connections/OAuthCallback";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { AppShell } from "./AppShell";
 import { DevelopmentWorkspace } from "./DevelopmentWorkspace";
+import { SmartPanel } from "../features/smart-panel/SmartPanel";
+import { SmartUsage } from "../features/smart-usage/SmartUsage";
 
 function ClerkApp() {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
@@ -24,6 +26,10 @@ function ClerkApp() {
       ) : isSignedIn ? (
         window.location.pathname === "/oauth/home-assistant" ? (
           <OAuthCallback api={api} />
+        ) : window.location.pathname === "/smart-panel" ? (
+          <SmartPanel api={api} />
+        ) : window.location.pathname === "/smart-usage" ? (
+          <SmartUsage key={userId} api={api} />
         ) : (
           <Dashboard key={userId} api={api} userId={userId ?? undefined} />
         )

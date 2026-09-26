@@ -1,4 +1,11 @@
-import type { Home, ConnectionStart, Command, HomeSettings } from "./types";
+import type {
+  Home,
+  CircuitPriority,
+  ConnectionStart,
+  Command,
+  HomeSettings,
+  SmartUsagePlan,
+} from "./types";
 export type TokenProvider = () => Promise<string | null>;
 export function createApi(getToken: TokenProvider) {
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -23,6 +30,21 @@ export function createApi(getToken: TokenProvider) {
   }
   return {
     homes: () => request<Home[]>("/homes"),
+    smartUsage: (homeId: string, targetWatts?: number, signal?: AbortSignal) =>
+      request<SmartUsagePlan>(
+        `/homes/${homeId}/smart-usage${targetWatts === undefined ? "" : `?targetWatts=${targetWatts}`}`,
+        { signal },
+      ),
+    applySmartUsage: (
+      homeId: string,
+      targetWatts: number,
+      revision: string,
+      idempotencyKey: string,
+    ) =>
+      request<Command[]>(`/homes/${homeId}/smart-usage`, {
+        method: "POST",
+        body: JSON.stringify({ targetWatts, revision, idempotencyKey }),
+      }),
     connect: (name: string, baseUrl: string) =>
       request<ConnectionStart>("/connections/home-assistant/start", {
         method: "POST",
@@ -37,6 +59,46 @@ export function createApi(getToken: TokenProvider) {
       request<Home>(`/homes/${homeId}/settings`, {
         method: "PUT",
         body: JSON.stringify(settings),
+      }),
+    smartPowerOff: (homeId: string, enabled: boolean) =>
+      request<Home>(`/homes/${homeId}/smart-power-off`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled }),
+      }),
+    keepOff: (homeId: string, entityId: string) =>
+      request<Home>(
+        `/homes/${homeId}/restore-queue/${encodeURIComponent(entityId)}`,
+        { method: "DELETE" },
+      ),
+    circuitCommand: (
+      homeId: string,
+      entityId: string,
+      action: "On" | "Off",
+      idempotencyKey: string,
+    ) =>
+      request<Command>(`/homes/${homeId}/circuits/commands`, {
+        method: "POST",
+        body: JSON.stringify({ entityId, action, idempotencyKey }),
+      }),
+    circuitPriority: (
+      homeId: string,
+      entityId: string,
+      priority: CircuitPriority,
+      idempotencyKey: string,
+    ) =>
+      request<Command>(`/homes/${homeId}/circuits/priority`, {
+        method: "PUT",
+        body: JSON.stringify({ entityId, priority, idempotencyKey }),
+      }),
+    evCurrent: (
+      homeId: string,
+      entityId: string,
+      amps: number,
+      idempotencyKey: string,
+    ) =>
+      request<Command>(`/homes/${homeId}/ev/current`, {
+        method: "POST",
+        body: JSON.stringify({ entityId, amps, idempotencyKey }),
       }),
     turnOff: (homeId: string, entityIds: string[], idempotencyKey: string) =>
       request<Command[]>(`/homes/${homeId}/commands`, {

@@ -240,3 +240,102 @@ describe("usage alerts", () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+describe("Smart Shutoff notifications", () => {
+  const automaticHome = (status = "Confirmed") =>
+    home({
+      householdWatts: 10000,
+      devices: [
+        { entityId: "switch.dryer", name: "Dryer" } as Home["devices"][number],
+      ],
+      commands: [
+        {
+          id: "auto-1",
+          entityId: "switch.dryer",
+          automatic: true,
+          status,
+          attempts: 1,
+          createdUtc: new Date().toISOString(),
+          message: null,
+        },
+      ],
+    });
+  it("notifies only after confirmation, even below the limit, and deduplicates across navigation", () => {
+    const { send } = notifications();
+    localStorage.setItem("base-layer-notifications", "true");
+    const select = vi.fn();
+    const view = render(
+      <UsageAlerts
+        homes={[automaticHome("AwaitingConfirmation")]}
+        stale={false}
+        onSelect={select}
+      />,
+    );
+    expect(send).not.toHaveBeenCalled();
+    view.rerender(
+      <UsageAlerts homes={[automaticHome()]} stale={false} onSelect={select} />,
+    );
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      "My home: Smart Shutoff",
+      expect.objectContaining({ body: "Turned off Dryer to reduce usage." }),
+    );
+    view.rerender(
+      <UsageAlerts homes={[automaticHome()]} stale={false} onSelect={select} />,
+    );
+    view.unmount();
+    render(
+      <UsageAlerts homes={[automaticHome()]} stale={false} onSelect={select} />,
+    );
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it("does not send when notifications are off or for failed commands", () => {
+    const { send } = notifications();
+    const view = render(
+      <UsageAlerts
+        homes={[automaticHome()]}
+        stale={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(send).not.toHaveBeenCalled();
+    view.unmount();
+    localStorage.setItem("base-layer-notifications", "true");
+    render(
+      <UsageAlerts
+        homes={[automaticHome("Failed")]}
+        stale={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
+  it("does not misreport a confirmed restoration as a shutoff", () => {
+    const { send } = notifications();
+    localStorage.setItem("base-layer-notifications", "true");
+    const current = automaticHome();
+    current.commands[0].action = "On";
+    render(<UsageAlerts homes={[current]} stale={false} onSelect={() => {}} />);
+    expect(send).not.toHaveBeenCalled();
+  });
+  it("waits for fresh data and includes the need for additional shutoffs", () => {
+    const { send } = notifications();
+    localStorage.setItem("base-layer-notifications", "true");
+    const current = {
+      ...automaticHome(),
+      smartPowerOffStatus: "insufficient" as const,
+    };
+    const view = render(
+      <UsageAlerts homes={[current]} stale={true} onSelect={() => {}} />,
+    );
+    expect(send).not.toHaveBeenCalled();
+    view.rerender(
+      <UsageAlerts homes={[current]} stale={false} onSelect={() => {}} />,
+    );
+    expect(send).toHaveBeenCalledWith(
+      "My home: Smart Shutoff",
+      expect.objectContaining({
+        body: expect.stringContaining("More devices need to be turned off"),
+      }),
+    );
+  });
+});

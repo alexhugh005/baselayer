@@ -46,7 +46,7 @@ export function CommandHistory({
         ["Pending", "AwaitingConfirmation", "Retrying"].includes(c.status),
       ) && (
         <p className="muted">
-          Cancel stops retries. Shutoffs already sent cannot be undone.
+          Cancel stops retries. Device changes already sent cannot be undone.
         </p>
       )}
       {commands.length === 0 ? (
@@ -60,13 +60,21 @@ export function CommandHistory({
                 {devices.find((d) => d.entityId === c.entityId)?.name ??
                   c.entityId}
               </strong>
-              <p>{c.message ?? "Waiting for shutoff confirmation."}</p>
+              <p>{c.message ?? "Waiting for device confirmation."}</p>
               <small>
                 {new Date(c.createdUtc).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}{" "}
-                · {c.attempts} attempt{c.attempts === 1 ? "" : "s"}
+                {c.action === "SetCircuitPriority"
+                  ? "· Grid outage setting "
+                  : c.action === "SetCurrent"
+                    ? `· ${c.isRestoration ? "Restore charging" : "Charging"} ${c.previousCurrentAmps != null ? `${c.previousCurrentAmps} → ` : ""}${c.currentAmps ?? ""} A `
+                    : c.action === "On"
+                      ? "· Restore "
+                      : "· Shutoff "}
+                {c.automatic ? "· Automatic " : ""}· {c.attempts} attempt
+                {c.attempts === 1 ? "" : "s"}
               </small>
             </div>
             <div className="command-actions">

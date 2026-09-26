@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowUpRight,
   Plus,
@@ -11,15 +11,19 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Api } from "../../lib/api";
-import type { Home } from "../../lib/types";
+import type { Home, ShutoffLevel } from "../../lib/types";
 import { DeleteHomeDialog } from "../connections/DeleteHomeDialog";
 import { useHomes } from "./useHomes";
 import { recommendationIds, formatPower } from "./power";
+import { smartPowerOffMessage } from "./smartPowerOffMessage";
+import { SmartShutoffSetting } from "./SmartShutoffSetting";
+import { RestoreQueue } from "../devices/RestoreQueue";
 import { UsageOverview } from "./UsageOverview";
 import { ProjectedUsage } from "./ProjectedUsage";
 import { UsageAlerts, isUsageHigh } from "./UsageAlerts";
 import { DeviceSettings } from "../devices/DeviceSettings";
 import { DeviceList } from "../devices/DeviceList";
+import { smartMatchPowerSensors } from "../devices/powerSensorMatching";
 import { useShutoffApproval } from "../commands/useShutoffApproval";
 import { ShutoffConfirmation } from "../commands/ShutoffConfirmation";
 import { CommandHistory } from "../commands/CommandHistory";
@@ -27,6 +31,7 @@ import { PairHome } from "../connections/PairHome";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { LoadingStatus } from "../../components/ui/LoadingStatus";
+import { CollapsingNotice } from "../../components/ui/CollapsingNotice";
 export function Dashboard({
   api,
   userId = "local",
@@ -53,13 +58,124 @@ export function Dashboard({
     homes.find((h) => h.id === active) ??
     homes.find((h) => !h.revoked) ??
     homes[0];
+  const devices = home?.devices.filter((device) => !device.isCircuit) ?? [];
+  const savingDeviceSettings = useRef(false);
+  const [connectingDevice, setConnectingDevice] = useState("");
+  const [changingShutoffDevice, setChangingShutoffDevice] = useState("");
+  const [shutoffLevelError, setShutoffLevelError] = useState({
+    homeId: "",
+    message: "",
+  });
+  const [powerSourceError, setPowerSourceError] = useState({
+    homeId: "",
+    message: "",
+  });
+  const powerSuggestions = home
+    ? smartMatchPowerSensors(
+        home.devices,
+        home.powerSensors,
+        home.householdPowerSensorId,
+      )
+    : {};
+  async function connectSuggestedPowerSource(entityId: string) {
+    const sensorId = powerSuggestions[entityId];
+    if (
+      !home ||
+      !home.connected ||
+      home.revoked ||
+      error ||
+      !sensorId ||
+      home.devices.find((device) => device.entityId === entityId)
+        ?.powerSensorId ||
+      savingDeviceSettings.current
+    )
+      return;
+    savingDeviceSettings.current = true;
+    setConnectingDevice(entityId);
+    setPowerSourceError({ homeId: home.id, message: "" });
+    try {
+      const updated = await api.settings(home.id, {
+        allowAll: false,
+        allowFutureDevices: home.allowFutureDevices,
+        allowedEntityIds: home.devices
+          .filter((device) => device.allowed)
+          .map((device) => device.entityId),
+        powerSource: home.powerSource,
+        householdPowerSensorId: home.householdPowerSensorId,
+        devicePowerSensors: {
+          ...Object.fromEntries(
+            home.devices
+              .filter((device) => device.powerSensorId)
+              .map((device) => [device.entityId, device.powerSensorId!]),
+          ),
+          [entityId]: sensorId,
+        },
+      });
+      updateHome(updated);
+    } catch (e) {
+      setPowerSourceError({ homeId: home.id, message: (e as Error).message });
+    } finally {
+      savingDeviceSettings.current = false;
+      setConnectingDevice("");
+    }
+  }
+  async function cycleShutoffLevel(entityId: string) {
+    const device = home?.devices.find((d) => d.entityId === entityId);
+    if (
+      !home ||
+      !device ||
+      !home.connected ||
+      home.revoked ||
+      error ||
+      savingDeviceSettings.current
+    )
+      return;
+    const current = device.allowed
+      ? (device.shutoffLevel ?? "Sometimes")
+      : "Never";
+    const next: ShutoffLevel =
+      current === "Sometimes"
+        ? "Never"
+        : current === "Never" && !entityId.startsWith("climate.")
+          ? "Anytime"
+          : "Sometimes";
+    savingDeviceSettings.current = true;
+    setChangingShutoffDevice(entityId);
+    setShutoffLevelError({ homeId: home.id, message: "" });
+    try {
+      const updated = await api.settings(home.id, {
+        allowAll: false,
+        allowFutureDevices: home.allowFutureDevices,
+        allowedEntityIds: home.devices
+          .filter((d) =>
+            d.entityId === entityId ? next !== "Never" : d.allowed,
+          )
+          .map((d) => d.entityId),
+        shutoffLevels: { [entityId]: next },
+        powerSource: home.powerSource,
+        householdPowerSensorId: home.householdPowerSensorId,
+        devicePowerSensors: Object.fromEntries(
+          home.devices
+            .filter((d) => d.powerSensorId)
+            .map((d) => [d.entityId, d.powerSensorId!]),
+        ),
+      });
+      updateHome(updated);
+    } catch (e) {
+      setShutoffLevelError({ homeId: home.id, message: (e as Error).message });
+    } finally {
+      savingDeviceSettings.current = false;
+      setChangingShutoffDevice("");
+    }
+  }
   const commands = useShutoffApproval(api, home, !!error, refresh);
   const { selectedDevices, setSelected } = commands;
   const high = home && !error && isUsageHigh(home);
   const syncing =
     home &&
     !error &&
-    (commands.busyHomeId === home.id ||
+    (home.smartPowerOffStatus === "reducing" ||
+      commands.busyHomeId === home.id ||
       (home.connected &&
         home.commands.some((command) =>
           ["Pending", "AwaitingConfirmation", "Retrying"].includes(
@@ -77,6 +193,11 @@ export function Dashboard({
         <header className="page-heading">
           <h1>Settings</h1>
         </header>
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
         <UsageAlerts
           homes={homes}
           stale={!!error || loading}
@@ -86,6 +207,24 @@ export function Dashboard({
             window.location.href = `/?home=${encodeURIComponent(id)}`;
           }}
         />
+        <section className="settings-section" aria-label="Smart Shutoff">
+          <h2>Smart Shutoff and automatic restore</h2>
+          {loading ? (
+            <p role="status">Loading your homes…</p>
+          ) : homes.length === 0 && !error ? (
+            <p className="muted">Connect a home to enable Smart Shutoff.</p>
+          ) : (
+            homes.map((home) => (
+              <SmartShutoffSetting
+                key={home.id}
+                home={home}
+                api={api}
+                stale={!!error}
+                onSaved={updateHome}
+              />
+            ))
+          )}
+        </section>
       </div>
     );
   }
@@ -130,7 +269,7 @@ export function Dashboard({
           </Button>
           <small>
             <ShieldCheck size={16} aria-hidden="true" />
-            Every shutoff needs your approval.
+            Choose which devices can turn off automatically.
           </small>
         </section>
       ) : (
@@ -157,8 +296,17 @@ export function Dashboard({
                 : "Waiting for Home Assistant"}
             </span>
           </div>
-          <UsageOverview home={home} progress={usageProgress} />
-          {high || syncing ? (
+          <UsageOverview home={home} />
+          {home.smartPowerOffEnabled && (
+            <p className="muted">
+              Smart Shutoff is on · Anytime devices can reduce charging or turn
+              off automatically.
+            </p>
+          )}
+          <CollapsingNotice
+            key={`usage-${home.id}`}
+            visible={!!(high || syncing)}
+          >
             <section
               className="recommendation"
               aria-label="Usage limit notification"
@@ -172,7 +320,13 @@ export function Dashboard({
                 )}
               </div>
               <div>
-                <h2>{syncing ? "Updating home usage" : "Reduce usage"}</h2>
+                <h2>
+                  {syncing
+                    ? home.smartPowerOffEnabled
+                      ? "Smart Shutoff is checking usage"
+                      : "Updating home usage"
+                    : "Reduce usage"}
+                </h2>
                 {usageProgress ? (
                   <>
                     <p role="status">{usageProgress}</p>
@@ -183,9 +337,10 @@ export function Dashboard({
                   </>
                 ) : (
                   <p>
-                    {home.devices.some((d) => d.recommended)
-                      ? `Suggested shutoffs could reduce usage to ${formatPower(home.projectedWatts)}.`
-                      : "No measured devices available to turn off. Check other appliances."}
+                    {smartPowerOffMessage(home) ??
+                      (home.devices.some((d) => d.recommended)
+                        ? `Suggested shutoffs could reduce usage to ${formatPower(home.projectedWatts)}.`
+                        : "No measured devices available to turn off. Check other appliances.")}
                   </p>
                 )}
               </div>
@@ -204,7 +359,8 @@ export function Dashboard({
                 Device Recommendations <ArrowUpRight size={16} />
               </Button>
             </section>
-          ) : !home.connected ? (
+          </CollapsingNotice>
+          {!high && !syncing && !home.connected ? (
             <div className="calm-note">
               <ShieldCheck size={19} />
               Controls are unavailable while disconnected.
@@ -214,21 +370,39 @@ export function Dashboard({
             <div className="section-heading">
               <div>
                 <h2>
-                  Devices <span className="count">{home.devices.length}</span>
+                  Devices <span className="count">{devices.length}</span>
                 </h2>
               </div>
               <Button
                 variant="secondary"
-                disabled={home.revoked}
+                disabled={
+                  home.revoked || !!connectingDevice || !!changingShutoffDevice
+                }
                 onClick={() => setSettings(true)}
               >
                 <Settings2 size={16} /> Device settings
               </Button>
             </div>
             <DeviceList
-              devices={home.devices}
+              devices={devices}
+              pendingCommands={home.commands.some((c) =>
+                ["Pending", "Retrying", "AwaitingConfirmation"].includes(
+                  c.status,
+                ),
+              )}
+              onSetEvCurrent={async (id, amps) => {
+                await api.evCurrent(home.id, id, amps, crypto.randomUUID());
+                await refresh();
+              }}
+              powerSuggestions={powerSuggestions}
+              connectingDevice={connectingDevice}
+              changingShutoffDevice={changingShutoffDevice}
+              onCycleShutoffLevel={(id) => void cycleShutoffLevel(id)}
+              onConnectPowerSource={(id) =>
+                void connectSuggestedPowerSource(id)
+              }
               selected={selectedDevices.map((d) => d.entityId)}
-              disabled={!home.connected || !!error}
+              disabled={!home.connected || home.revoked || !!error}
               loading={!home.revoked && !home.lastSeenUtc && !error}
               onToggle={(id) =>
                 setSelected((v) =>
@@ -236,6 +410,18 @@ export function Dashboard({
                 )
               }
             />
+            {shutoffLevelError.homeId === home.id &&
+              shutoffLevelError.message && (
+                <p className="error device-connection-error" role="alert">
+                  {shutoffLevelError.message}
+                </p>
+              )}
+            {powerSourceError.homeId === home.id &&
+              powerSourceError.message && (
+                <p className="error device-connection-error" role="alert">
+                  {powerSourceError.message}
+                </p>
+              )}
             <ProjectedUsage
               home={home}
               devices={selectedDevices}
@@ -253,6 +439,12 @@ export function Dashboard({
               </Button>
             </div>
           </section>
+          <RestoreQueue
+            home={home}
+            api={api}
+            onSaved={updateHome}
+            stale={!!error}
+          />
           <CommandHistory
             key={home.id}
             commands={home.commands}
@@ -305,6 +497,9 @@ export function Dashboard({
             setRecommendationsHome(null);
           }}
         >
+          {smartPowerOffMessage(home) && (
+            <p role="status">{smartPowerOffMessage(home)}</p>
+          )}
           <DeviceList
             devices={home.devices.filter((d) => d.recommended)}
             selected={selectedDevices.map((d) => d.entityId)}

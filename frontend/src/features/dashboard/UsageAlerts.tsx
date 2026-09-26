@@ -55,6 +55,77 @@ export function UsageAlerts({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const notified = useRef(new Set<string>());
+  const automaticNotified = useRef(new Set<string>());
+  const automaticLoaded = useRef(false);
+
+  useEffect(() => {
+    if (stale) return;
+    const storageKey = `${preferenceKey}:smart-power-off-seen`;
+    if (!automaticLoaded.current) {
+      try {
+        const saved: unknown = JSON.parse(
+          localStorage.getItem(storageKey) ?? "[]",
+        );
+        if (Array.isArray(saved))
+          automaticNotified.current = new Set(
+            saved.filter((id): id is string => typeof id === "string"),
+          );
+      } catch {
+        /* In-memory deduplication still works when storage is unavailable. */
+      }
+      automaticLoaded.current = true;
+    }
+    for (const home of homes) {
+      const confirmed = (home.commands ?? []).filter(
+        (c) =>
+          c.automatic &&
+          c.action !== "On" &&
+          c.status === "Confirmed" &&
+          !automaticNotified.current.has(c.id),
+      );
+      const recent = confirmed.filter(
+        (c) => Date.now() - Date.parse(c.createdUtc) < 5 * 60 * 1000,
+      );
+      if (
+        enabled &&
+        supported &&
+        Notification.permission === "granted" &&
+        recent.length
+      ) {
+        try {
+          const names = recent.map(
+            (c) =>
+              home.devices.find((d) => d.entityId === c.entityId)?.name ??
+              c.entityId,
+          );
+          const notification = new Notification(`${home.name}: Smart Shutoff`, {
+            body: `Turned off ${names.join(", ")} to reduce usage.${home.smartPowerOffStatus === "insufficient" ? " More devices need to be turned off to get below the limit. Open Base Layer to review." : home.smartPowerOffStatus === "review" ? " Usage is still high. Open Base Layer to review Sometimes devices." : ""}`,
+            tag: `smart-power-off-${home.id}`,
+          });
+          notification.onclick = () => {
+            window.focus();
+            onSelect(home.id);
+            notification.close();
+          };
+        } catch {
+          setEnabled(false);
+          setMessage(
+            "This browser could not show a notification. Check Recent activity for automatic shutoffs.",
+          );
+        }
+      }
+      for (const command of confirmed)
+        automaticNotified.current.add(command.id);
+    }
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify([...automaticNotified.current].slice(-300)),
+      );
+    } catch {
+      /* Keep deduplicating in memory. */
+    }
+  }, [homes, stale, enabled, supported, preferenceKey, onSelect]);
 
   useEffect(() => {
     if (stale) return;
@@ -134,8 +205,8 @@ export function UsageAlerts({
             <div>
               <h3>Browser notifications</h3>
               <p className="muted" id="notification-help">
-                Notify me when a home reaches its usage limit. Works while Base
-                Layer is open.
+                Notify me when a home reaches its usage limit or Smart Shutoff
+                confirms a device shutoff. Works while Base Layer is open.
               </p>
               {(message || !supported || busy) && (
                 <p className="settings-status" role="status">

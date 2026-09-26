@@ -4,6 +4,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Settings,
+  Lightbulb,
+  CircuitBoard,
 } from "lucide-react";
 
 export function AppShell({
@@ -61,6 +63,34 @@ export function AppShell({
               >
                 <LayoutDashboard size={18} />{" "}
                 <span className="nav-label">Overview</span>
+              </a>
+              <a
+                className={`nav-item${window.location.pathname === "/smart-usage" ? " active" : ""}`}
+                href="/smart-usage"
+                aria-current={
+                  window.location.pathname === "/smart-usage"
+                    ? "page"
+                    : undefined
+                }
+                aria-label="Smart Usage"
+                title="Smart Usage"
+              >
+                <Lightbulb size={18} />
+                <span className="nav-label">Smart Usage</span>
+              </a>
+              <a
+                className={`nav-item${window.location.pathname === "/smart-panel" ? " active" : ""}`}
+                href="/smart-panel"
+                aria-current={
+                  window.location.pathname === "/smart-panel"
+                    ? "page"
+                    : undefined
+                }
+                aria-label="Smart Panel"
+                title="Smart Panel"
+              >
+                <CircuitBoard size={18} />
+                <span className="nav-label">Smart Panel</span>
               </a>
               <a
                 className={`nav-item${window.location.pathname === "/settings" ? " active" : ""}`}

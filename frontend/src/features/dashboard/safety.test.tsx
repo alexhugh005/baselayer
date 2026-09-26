@@ -8,6 +8,7 @@ import {
   renderHook,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
 import type { Api } from "../../lib/api";
 import type { Home } from "../../lib/types";
@@ -86,12 +87,17 @@ describe("shutoff approval safety", () => {
     await act(async () =>
       fireEvent.click(screen.getByRole("button", { name: "Turn Off" })),
     );
-    expect(screen.getAllByText("Applying device changes…")).toHaveLength(2);
-    expect(screen.getByText("Last reading: 13.00 kW")).toBeTruthy();
+    expect(screen.getAllByText("Applying device changes…")).toHaveLength(1);
+    expect(
+      screen
+        .getByRole("meter", { name: "Household power" })
+        .getAttribute("aria-valuenow"),
+    ).toBe("11000");
+    expect(screen.queryByText(/Last reading:/)).toBeNull();
     await act(async () => sending.resolve([]));
     expect(
       screen.getAllByText("Re-syncing devices and checking usage…"),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     const modal = within(
       screen.getByRole("dialog", { name: "Device Recommendations" }),
     );
@@ -104,9 +110,16 @@ describe("shutoff approval safety", () => {
     ).toBe(true);
     await act(async () => sync.resolve([{ ...current, householdWatts: 3000 }]));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(
-      screen.queryByText("Re-syncing devices and checking usage…"),
-    ).toBeNull();
+    const exiting = screen
+      .getByText("Re-syncing devices and checking usage…")
+      .closest(".collapsing-notice");
+    expect(exiting?.classList.contains("is-visible")).toBe(false);
+    expect(exiting?.getAttribute("aria-hidden")).toBe("true");
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Re-syncing devices and checking usage…"),
+      ).toBeNull(),
+    );
   });
 
   it.each(["Confirmed", "Failed", "Expired", "Cancelled"])(
@@ -129,7 +142,7 @@ describe("shutoff approval safety", () => {
       await act(async () => {});
       expect(
         screen.getAllByText("Re-syncing devices and checking usage…"),
-      ).toHaveLength(2);
+      ).toHaveLength(1);
       homes.mockResolvedValue([
         { ...current, commands: [{ ...current.commands[0], status }] },
       ]);
@@ -371,8 +384,9 @@ describe("device permissions", () => {
     ).toBeNull();
     expect(pairing.value).toBe("sensor.dryer_power");
     expect(pairing.disabled).toBe(false);
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: "Allow shutoff for dryer" }),
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "dryer Smart Shutoff" }),
+      { target: { value: "Never" } },
     );
     expect(pairing.disabled).toBe(false);
     fireEvent.click(toggle);
@@ -398,7 +412,7 @@ describe("device permissions", () => {
     );
   });
 
-  it("reflects existing all access, clears it, and keeps future access separate", async () => {
+  it("maps existing permissions to Sometimes and saves all three shutoff levels", async () => {
     const settings = vi.fn().mockResolvedValue(home());
     render(
       <DeviceSettings
@@ -408,21 +422,24 @@ describe("device permissions", () => {
         onSaved={() => {}}
       />,
     );
-    const all = screen.getByRole("checkbox", {
-      name: "Allow shutoff for all current devices",
-    }) as HTMLInputElement;
-    expect(all.checked).toBe(true);
-    fireEvent.click(all);
     expect(
       (
-        screen.getByRole("checkbox", {
-          name: "Allow shutoff for dryer",
-        }) as HTMLInputElement
-      ).checked,
-    ).toBe(false);
+        screen.getByRole("combobox", {
+          name: "dryer Smart Shutoff",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("Sometimes");
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "dryer Smart Shutoff" }),
+      { target: { value: "Anytime" } },
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "heater Smart Shutoff" }),
+      { target: { value: "Never" } },
+    );
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: "Allow shutoff for new devices automatically",
+        name: "Set new devices to Sometimes (approval required)",
       }),
     );
     await act(async () =>
@@ -431,14 +448,15 @@ describe("device permissions", () => {
     expect(settings).toHaveBeenCalledWith(
       "home-1",
       expect.objectContaining({
+        shutoffLevels: { "switch.dryer": "Anytime", "switch.heater": "Never" },
         allowAll: false,
-        allowedEntityIds: [],
+        allowedEntityIds: ["switch.dryer"],
         allowFutureDevices: true,
       }),
     );
   });
 
-  it("shows partial access as indeterminate and saves explicit selections", async () => {
+  it("preserves Never devices when saving explicit selections", async () => {
     const current = home();
     current.devices[1].allowed = false;
     const settings = vi.fn().mockResolvedValue(current);
@@ -450,10 +468,13 @@ describe("device permissions", () => {
         onSaved={() => {}}
       />,
     );
-    const all = screen.getByRole("checkbox", {
-      name: "Allow shutoff for all current devices",
-    }) as HTMLInputElement;
-    expect(all.indeterminate).toBe(true);
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: "heater Smart Shutoff",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("Never");
     await act(async () =>
       fireEvent.click(screen.getByRole("button", { name: "Save settings" })),
     );

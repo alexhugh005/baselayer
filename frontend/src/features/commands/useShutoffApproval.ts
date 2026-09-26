@@ -25,7 +25,13 @@ export function useShutoffApproval(
   const eligible =
     home?.connected && !stale
       ? home.devices
-          .filter((d) => d.allowed && isDeviceRunning(d.state))
+          .filter(
+            (d) =>
+              d.allowed &&
+              d.shutoffLevel !== "Never" &&
+              !d.entityId.startsWith("climate.") &&
+              isDeviceRunning(d.state),
+          )
           .map((d) => d.entityId)
       : [];
   const eligibility = eligible.join("|");
