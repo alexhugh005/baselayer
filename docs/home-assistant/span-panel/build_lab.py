@@ -50,8 +50,8 @@ def panel_config():
     panel['bess'] = {'enabled': True, 'vendor': 'Span', 'product_name': 'Energy Lab simulated battery',
                      'serial_number': 'SIM-ENERGY-LAB-BESS', 'firmware_version': 'sim-bess/v0.1.0',
                      'mid_product_name': 'Energy Lab simulated MID', 'mid_firmware_version': 'sim-mid/v0.1.0',
-                     'mid_hardware_version': 'virtual', 'nameplate_capacity_kwh': 13.5,
-                     'initial_soe_kwh': 10.8, 'max_charge_w': 3500.0, 'max_discharge_w': 11000.0,
+                     'mid_hardware_version': 'virtual', 'nameplate_capacity_kwh': 25,
+                     'initial_soe_kwh': 20, 'max_charge_w': 3500.0, 'max_discharge_w': 11000.0,
                      'charge_efficiency': 0.95, 'discharge_efficiency': 0.95,
                      'backup_reserve_pct': 0.0, 'charge_mode': 'backup-only'}
     save(HERE / 'energy-lab.yaml', panel)

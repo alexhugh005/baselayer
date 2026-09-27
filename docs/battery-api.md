@@ -10,8 +10,8 @@ Example response (values are illustrative):
 ```json
 {
   "homeId": "2ea09c42-7c8a-4573-bc96-9c05da020833",
-  "capacityKwh": 13.5,
-  "storedEnergyKwh": 10.8,
+  "capacityKwh": 25,
+  "storedEnergyKwh": 20,
   "stateOfChargePercent": 80,
   "observedAtUtc": "2026-09-26T12:00:00+00:00",
   "isSimulated": true
@@ -33,7 +33,7 @@ in `appsettings.Local.json` or using environment variables such as
 {
   "Battery": {
     "Simulation": {
-      "CapacityKwh": 13.5,
+      "CapacityKwh": 25,
       "InitialStateOfChargePercent": 80,
       "NetPowerWatts": 1000
     }

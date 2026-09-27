@@ -228,7 +228,7 @@ views:
       and **Reset realistic household** to reset appliances.
 
 
-      The simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Home Assistant
+      The simulated battery is 25 kWh, initially 80%, with 11 kW output. Home Assistant
       does not reject circuit restores or disconnect circuits based on a watt limit.
       Base Layer manages its own power budget. EV charging is capped at **24 A / 5.76
       kW** on backup. A blocked restore appears in Notifications. The old whole-house

@@ -271,7 +271,7 @@ power-management policy. EV charging retains its separate 5,760 W backup cap.
 **Effective EV Current** shows the cap in effect. Normal charging limits resume
 on grid power.
 
-The native simulated battery has 13.5 kWh capacity, starts at 10.8 kWh (80%), and
+The native simulated battery has 25 kWh capacity, starts at 20 kWh (80%), and
 has 11 kW maximum discharge output. It uses backup-only dispatch. A simulator
 restart resets battery charge to its configured starting value; an HA restart
 retains the grid-outage selection but clears circuit admission flags and requires manual
