@@ -93,7 +93,7 @@ public sealed partial class PlatformService
         var prior = home.Commands.Where(c => c.IdempotencyKey == request.IdempotencyKey).ToList();
         if (prior.Count > 0)
         {
-            if (prior.Count != 1 || prior[0].Automatic || prior[0].Action != "SetCurrent" || prior[0].EntityId != request.EntityId || prior[0].CurrentAmps != request.Amps)
+            if (prior.Count != 1 || prior[0].Automatic || prior[0].Action != "SetCurrent" || prior[0].EntityId != request.EntityId || prior[0].CurrentAmps != request.Amps || prior[0].ChargeLimitPercent != request.ChargeLimitPercent || prior[0].EvVehicleId != request.VehicleId || prior[0].StartCharge != request.StartCharge)
                 throw new ArgumentException("Idempotency key was used for a different command.");
             return Dto(prior[0]);
         }
@@ -102,16 +102,25 @@ public sealed partial class PlatformService
         if (!Fresh(home, Now) || home.ProtectedTokens is null || device is null || device.State is not ("on" or "off") ||
             control?.Amps is null || !EvChargingPolicy.Valid(control, request.Amps))
             throw new ArgumentException("Choose an available, permitted EV and a current within its supported range and step.");
+        if (request.VehicleId is { } vehicleId && !EvVehicles(home).Any(v => v.Id == vehicleId && v.ChargerEntityId == device.EntityId))
+            throw new ArgumentException("Choose a saved vehicle assigned to this charger.");
+        var chargeLimit = EvChargeLimit(home, device, request.VehicleId);
+        if (request.ChargeLimitPercent is { } percent && (chargeLimit?.Percent is null || !ValidChargeLimit(chargeLimit, percent)))
+            throw new ArgumentException("Choose a charge limit within the vehicle’s available range and step.");
         foreach (var c in home.Commands) CommandPolicy.Advance(c, Now);
         if (home.Commands.Any(c => !CommandPolicy.Terminal(c)))
             throw new ArgumentException("Wait for pending device commands before changing charging current.");
-        AutoRestorePolicy.ClearCurrentRestore(device);
+        if (request.StartCharge) AutoRestorePolicy.Clear(device);
+        else AutoRestorePolicy.ClearCurrentRestore(device);
         var command = new DeviceCommand
         {
             HomeId = id, EntityId = device.EntityId, RequestedBy = owner, Action = "SetCurrent",
             CurrentControlEntityId = control.EntityId, CurrentAmps = request.Amps,
+            ChargeLimitControlEntityId = request.ChargeLimitPercent is null ? null : chargeLimit!.EntityId,
+            ChargeLimitPercent = request.ChargeLimitPercent, EvVehicleId = request.VehicleId, StartCharge = request.StartCharge,
             IdempotencyKey = request.IdempotencyKey, CreatedUtc = Now, NextAttemptUtc = Now,
-            ExpiresUtc = Now.AddSeconds(30), Message = $"Setting EV charging current to {request.Amps:0.##} A."
+            ExpiresUtc = Now.AddSeconds(request.StartCharge ? 90 : request.ChargeLimitPercent is null ? 30 : 60),
+            Message = request.ChargeLimitPercent is { } limit ? $"Setting charge limit to {limit:0.##}% and current to {request.Amps:0.##} A." : $"Setting EV charging current to {request.Amps:0.##} A."
         };
         home.Commands.Add(command);
         await repository.SaveAsync();
@@ -129,6 +138,11 @@ public sealed partial class PlatformService
                 entry.ResumeWaiting();
             }
         }
+        if (command.EvVehicleId is { } vehicleId && !EvVehicles(home).Any(v => v.Id == vehicleId && v.ChargerEntityId == device.EntityId))
+        {
+            Pause("Vehicle or its charger assignment changed.");
+            return;
+        }
         var control = EvControl(home, device);
         if (control?.Amps is not { } current || control.EntityId != command.CurrentControlEntityId ||
             command.CurrentAmps is not { } target || !EvChargingPolicy.Valid(control, target) || device.State is not ("on" or "off"))
@@ -136,10 +150,13 @@ public sealed partial class PlatformService
             Pause("Charging current control is unavailable or its configuration changed.");
             return;
         }
+        if (!await EnsureEvChargeLimit(home, device, command, tokens)) return;
         if (Math.Abs(current - target) < 0.000001)
         {
+            if (!await EnsureEvStarted(home, device, command, tokens)) return;
             command.Status = "Confirmed";
-            command.Message = $"Home Assistant reports the EV current limit at {current:0.##} A.";
+            command.Message = command.ChargeLimitPercent is { } limit ? $"Home Assistant confirms {limit:0.##}% charge limit and {current:0.##} A current." : $"Home Assistant reports the EV current limit at {current:0.##} A.";
+            if (command.StartCharge) command.Message = "Charger is on. " + command.Message;
             if (command.Automatic && device.RestoreEntry is { TargetCurrentAmps: not null } entry)
             {
                 entry.LastManagedCurrentAmps = current;
@@ -175,7 +192,7 @@ public sealed partial class PlatformService
         }
         CommandPolicy.Advance(command, Now);
         if (CommandPolicy.Terminal(command) || command.Status == "AwaitingConfirmation" || command.NextAttemptUtc > Now) return;
-        if (command.Attempts == 0) command.PreviousCurrentAmps = current;
+        command.PreviousCurrentAmps ??= current;
         if (command.Automatic)
         {
             var entry = AutoRestorePolicy.Enqueue(device, Now);

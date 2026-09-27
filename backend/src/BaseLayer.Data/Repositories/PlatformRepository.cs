@@ -21,7 +21,7 @@ public sealed class PlatformRepository(PlatformDbContext db, DatabaseGate gate) 
         }
         finally { gate.Semaphore.Release(); }
     }
-    private IQueryable<Home> Homes => db.Homes.Include(h => h.Devices).ThenInclude(d => d.RestoreEntry).Include(h => h.Commands).AsSplitQuery();
+    private IQueryable<Home> Homes => db.Homes.Include(h => h.Devices).ThenInclude(d => d.RestoreEntry).Include(h => h.Commands).Include(h => h.Anomalies).AsSplitQuery();
     public Task<List<Home>> HomesAsync(string ownerId) => Homes.Where(h => h.OwnerId == ownerId).ToListAsync();
     public Task<Home?> HomeAsync(Guid id) => Homes.SingleOrDefaultAsync(h => h.Id == id);
     public Task<List<Guid>> ActiveHomeIdsAsync() => db.Homes.Where(h => !h.Revoked && h.ProtectedTokens != null).Select(h => h.Id).ToListAsync();

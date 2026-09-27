@@ -18,7 +18,7 @@ public sealed class RestorationPlanningTests
 
     private static Home House(params Device[] devices) => new()
     {
-        SmartPowerOffEnabled = true,
+        GridOutageRisk = GridOutageRisk.Medium, SmartPowerOffEnabled = true,
         HouseholdWatts = 1000, Devices = devices.ToList()
     };
 
@@ -48,12 +48,15 @@ public sealed class RestorationPlanningTests
     }
 
     [Theory]
-    [InlineData(9500, false)]
-    [InlineData(9499, true)]
-    public void PowerOnStrategyPreservesStrictBuffer(double total, bool fits)
+    [InlineData(GridOutageRisk.Medium, 9500, false)]
+    [InlineData(GridOutageRisk.High, 9500, false)]
+    [InlineData(GridOutageRisk.Medium, 9499, true)]
+    [InlineData(GridOutageRisk.Low, 12000, true)]
+    public void PowerOnStrategyPreservesStrictBufferAndLowRiskException(string risk, double total, bool fits)
     {
         var device = Load();
         var home = House(device);
+        home.GridOutageRisk = risk;
         home.HouseholdWatts = total;
         Assert.Equal(fits, new PowerOnRestoration().Plan(home, device, Now, 11000) is not null);
     }

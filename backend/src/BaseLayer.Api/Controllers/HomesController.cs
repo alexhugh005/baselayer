@@ -8,9 +8,13 @@ namespace BaseLayer.Api.Controllers;
 public sealed class HomesController(IPlatformService service) : ControllerBase
 {
     private string Owner => User.FindFirst("sub")?.Value ?? throw new UnauthorizedAccessException();
+    [HttpPut("{id:guid}/anomaly-savings")] public async Task<IActionResult> AnomalySavings(Guid id, AnomalySavingsRequest request) => Ok(await service.AnomalySavingsAsync(Owner, id, request));
+    [HttpPost("{id:guid}/anomalies")] public async Task<IActionResult> EnqueueAnomaly(Guid id, EnqueueAnomalyRequest request) => Ok(await service.EnqueueAnomalyAsync(Owner, id, request));
     [HttpGet] public async Task<IActionResult> List() => Ok(await service.HomesAsync(Owner));
     [HttpPut("{id:guid}/settings")] public async Task<IActionResult> Settings(Guid id, HomeSettingsRequest request) => Ok(await service.SettingsAsync(Owner, id, request));
     [HttpPut("{id:guid}/smart-power-off")] public async Task<IActionResult> SmartPowerOff(Guid id, SmartPowerOffRequest request) => Ok(await service.SmartPowerOffAsync(Owner, id, request));
+    [HttpPut("{id:guid}/ev/vehicles")] public async Task<IActionResult> EvVehicle(Guid id, EvVehicleDto request) => Ok(await service.SaveEvVehicleAsync(Owner, id, request));
+    [HttpPut("{id:guid}/ev/battery")] public async Task<IActionResult> EvBattery(Guid id, EvBatterySettingsRequest request) => Ok(await service.EvBatterySettingsAsync(Owner, id, request));
     [HttpPost("{id:guid}/ev/current")] public async Task<IActionResult> EvCurrent(Guid id, EvCurrentRequest request) => Ok(await service.EvCurrentAsync(Owner, id, request));
     [HttpPost("{id:guid}/circuits/commands")] public async Task<IActionResult> CircuitCommand(Guid id, CircuitCommandRequest request) => Ok(await service.CircuitCommandAsync(Owner, id, request));
     [HttpPut("{id:guid}/circuits/priority")] public async Task<IActionResult> CircuitPriority(Guid id, CircuitPriorityRequest request) => Ok(await service.CircuitPriorityAsync(Owner, id, request));

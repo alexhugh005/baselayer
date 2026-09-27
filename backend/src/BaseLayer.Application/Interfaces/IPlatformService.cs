@@ -3,11 +3,15 @@ namespace BaseLayer.Application.Interfaces;
 
 public interface IPlatformService
 {
+    Task<HomeDto> AnomalySavingsAsync(string owner, Guid id, AnomalySavingsRequest request);
+    Task<AnomalyDto> EnqueueAnomalyAsync(string owner, Guid id, EnqueueAnomalyRequest request);
     Task<List<HomeDto>> HomesAsync(string owner);
     Task<OAuthStartResult> StartAsync(string owner, OAuthStartRequest request);
     Task<HomeDto> CompleteAsync(string owner, OAuthCompleteRequest request);
     Task<HomeDto> SettingsAsync(string owner, Guid id, HomeSettingsRequest request);
     Task<HomeDto> SmartPowerOffAsync(string owner, Guid id, SmartPowerOffRequest request);
+    Task<HomeDto> SaveEvVehicleAsync(string owner, Guid homeId, EvVehicleDto request);
+    Task<HomeDto> EvBatterySettingsAsync(string owner, Guid homeId, EvBatterySettingsRequest request);
     Task<CommandDto> EvCurrentAsync(string owner, Guid homeId, EvCurrentRequest request);
     Task<CommandDto> CircuitCommandAsync(string owner, Guid homeId, CircuitCommandRequest request);
     Task<CommandDto> CircuitPriorityAsync(string owner, Guid homeId, CircuitPriorityRequest request);

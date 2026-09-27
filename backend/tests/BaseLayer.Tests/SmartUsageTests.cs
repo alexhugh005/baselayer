@@ -69,6 +69,7 @@ public sealed class SmartUsagePolicyTests
         home.Devices.Add(Load("extra", 1000, "off"));
         Assert.True(Plan(home, 11000).CanApply);
         home.SmartPowerOffEnabled = true;
+        home.GridOutageRisk = GridOutageRisk.Medium;
         Assert.False(Plan(home, 11000).CanApply);
         Assert.Contains("Smart Shutoff", Plan(home, 11000).BlockedReason);
     }

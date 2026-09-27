@@ -173,7 +173,7 @@ public sealed partial class PlatformTests
                 AtFront = true, EligibleSinceUtc = now.AddSeconds(-10) } };
         var load = new Device { EntityId = "switch.other", Present = true, Allowed = true, State = "off", ShutoffLevel = "Anytime",
             RestoreEntry = new() { QueuedUtc = now.AddSeconds(-60), EstimatedWatts = 1000, PowerOn = true, EligibleSinceUtc = now.AddSeconds(-10) } };
-        var home = new Home { SmartPowerOffEnabled = true, HouseholdWatts = 7480, Devices = [load, ev],
+        var home = new Home { GridOutageRisk = GridOutageRisk.Medium, SmartPowerOffEnabled = true, HouseholdWatts = 7480, Devices = [load, ev],
             CurrentControlsJson = System.Text.Json.JsonSerializer.Serialize(new[] { new CurrentControlDto("number.ev", "EV", 27, 6, 48, 1) }) };
         AutoRestorePolicy.QueueNext(home, now, 11000);
         Assert.Equal("switch.ev", Assert.Single(home.Commands).EntityId);

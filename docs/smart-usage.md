@@ -60,8 +60,9 @@ switch. Failed switches stay visible instead of being reported as success.
 Devices left off by a confirmed plan are held out of automatic restore. A shorter
 Smart Usage plan can bring them back. This hold persists across API restarts and
 is cleared if an off device is observed turning on externally. Smart Shutoff can
-still shed Anytime loads if actual household power reaches its existing threshold.
-While Smart Shutoff is enabled, a plan landing exactly at 11 kW is also blocked
+still shed Anytime loads at medium/high grid risk, and Sometimes loads at high risk,
+if actual household power reaches its existing threshold.
+While Smart Shutoff is enabled and grid risk is medium/high, a plan landing exactly at 11 kW is also blocked
 so that automation will not immediately undo an approved turn-on.
 
 ## Estimate limits

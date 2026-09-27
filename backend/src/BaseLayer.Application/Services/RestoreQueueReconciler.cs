@@ -54,7 +54,7 @@ internal static class RestoreQueueReconciler
             AutoRestorePolicy.Clear(device); // The user paused a throttled car; do not restart it.
             return;
         }
-        if (device.State == "on" && entry.PowerOn && !pending.Any(c => c.Action == "On"))
+        if (device.State == "on" && entry.PowerOn && !pending.Any(c => c.Action is "On" or "Off"))
         {
             entry.PowerOn = false;
             if (entry.TargetCurrentAmps is null) AutoRestorePolicy.Clear(device);

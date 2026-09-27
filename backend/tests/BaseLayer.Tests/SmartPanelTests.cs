@@ -13,6 +13,94 @@ public sealed partial class PlatformTests
     private void CircuitState(string state) => provider.Snapshot = new([new(CircuitId, "SPAN Panel Living Room Breaker", state)], [], new());
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BatteryCircuitDoesNotConfirmTemporaryRelayClosure(bool overBudget)
+    {
+        void Snapshot(string relay, double watts)
+        {
+            RecoverySnapshot("battery", ("load", "on", watts, 6000), ("living_room", relay, 0, 6000));
+            provider.Snapshot = provider.Snapshot! with { CircuitSupplyStates = new() { [CircuitId] = false } };
+        }
+        Snapshot("off", 1000);
+        var home = await Connect();
+        await service.CircuitCommandAsync("alice", home.Id, new(CircuitId, "On", "temporary-on"));
+        await service.PollAsync(home.Id);
+        Assert.Equal(1, provider.TurnOns);
+        // Native relay closes briefly, but the backup controller never admits supply.
+        clock.Advance(1);
+        Snapshot("on", 1000);
+        await service.PollAsync(home.Id);
+        Assert.Equal("AwaitingConfirmation", Assert.Single((await service.HomesAsync("alice"))[0].Commands).Status);
+        clock.Advance(10);
+        Snapshot("off", overBudget ? 6000 : 1000);
+        await service.PollAsync(home.Id);
+        var result = Assert.Single((await service.HomesAsync("alice"))[0].Commands);
+        Assert.Equal("Failed", result.Status);
+        Assert.Equal(overBudget ? "Kept off: would exceed the 11 kW battery limit." : "Stayed off: battery backup did not supply this circuit.", result.Message);
+        Assert.Equal(1, provider.TurnOns);
+    }
+
+    [Fact]
+    public async Task BatteryCircuitConfirmsOnlyAfterSupplyAndSettling()
+    {
+        RecoverySnapshot("battery", ("living_room", "off", 0, 100));
+        provider.Snapshot = provider.Snapshot! with { CircuitSupplyStates = new() { [CircuitId] = false } };
+        var home = await Connect();
+        await service.CircuitCommandAsync("alice", home.Id, new(CircuitId, "On", "admitted"));
+        await service.PollAsync(home.Id);
+        RecoverySnapshot("battery", ("living_room", "on", 100, 100));
+        provider.Snapshot = provider.Snapshot! with { CircuitSupplyStates = new() { [CircuitId] = true } };
+        clock.Advance(1);
+        await service.PollAsync(home.Id);
+        Assert.Equal("AwaitingConfirmation", Assert.Single((await service.HomesAsync("alice"))[0].Commands).Status);
+        clock.Advance(5);
+        await service.PollAsync(home.Id);
+        Assert.Equal("Confirmed", Assert.Single((await service.HomesAsync("alice"))[0].Commands).Status);
+        Assert.Equal(1, provider.TurnOns);
+    }
+
+    [Theory]
+    [InlineData("battery", 6000d, 6000d, true)]
+    [InlineData("battery", 5000d, 6000d, false)]
+    [InlineData("grid", 6000d, 6000d, false)]
+    [InlineData("unknown", 6000d, 6000d, false)]
+    [InlineData("battery", 6000d, null, false)]
+    [InlineData("battery", null, 6000d, false)]
+    public async Task ManualCircuitReportsBatteryLimitOnlyWithKnownOverBudgetLoad(string mode, double? watts, double? estimate, bool blocked)
+    {
+        RecoverySnapshot(mode, ("load", "on", watts, 6000), ("living_room", "off", 0, estimate));
+        var home = await Connect();
+        await service.CircuitCommandAsync("alice", home.Id, new(CircuitId, "On", "battery-limit"));
+        await service.PollAsync(home.Id);
+        var result = Assert.Single((await service.HomesAsync("alice"))[0].Commands);
+        Assert.Equal(blocked ? "Failed" : "AwaitingConfirmation", result.Status);
+        Assert.Equal(blocked ? 0 : 1, provider.TurnOns);
+        if (blocked)
+        {
+            Assert.Equal("Kept off: would exceed the 11 kW battery limit.", result.Message);
+            // Reducing usage permits a fresh user attempt; the refusal is not retried automatically.
+            RecoverySnapshot("battery", ("load", "on", 4000, 6000), ("living_room", "off", 0, 6000));
+            await service.PollAsync(home.Id);
+            Assert.Equal(0, provider.TurnOns);
+            await service.CircuitCommandAsync("alice", home.Id, new(CircuitId, "On", "battery-retry"));
+            await service.PollAsync(home.Id);
+            Assert.Equal(1, provider.TurnOns);
+        }
+    }
+
+    [Fact]
+    public async Task BatteryLimitDoesNotBlockManualCircuitTurnOff()
+    {
+        RecoverySnapshot("battery", ("living_room", "on", 12000, 12000));
+        var home = await Connect();
+        await service.CircuitCommandAsync("alice", home.Id, new(CircuitId, "Off", "battery-off"));
+        await service.PollAsync(home.Id);
+        Assert.Equal(1, provider.Sends);
+        Assert.Equal("AwaitingConfirmation", Assert.Single((await service.HomesAsync("alice"))[0].Commands).Status);
+    }
+
+    [Theory]
     [InlineData("On", "off", "on")]
     [InlineData("Off", "on", "off")]
     public async Task ManualCircuitUsesProviderAndWaitsForObservedConfirmation(string action, string before, string after)

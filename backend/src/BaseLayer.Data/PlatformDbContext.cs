@@ -10,6 +10,10 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     protected override void OnModelCreating(ModelBuilder b)
     {
         UsageModelConfiguration.Configure(b);
+        b.Entity<UsageAnomaly>().ToTable("UsageAnomalies");
+        b.Entity<UsageAnomaly>().Property(x => x.Id).ValueGeneratedNever();
+        b.Entity<UsageAnomaly>().HasIndex(x => new { x.HomeId, x.EventId }).IsUnique();
+        b.Entity<Home>().HasMany(h => h.Anomalies).WithOne().HasForeignKey(x => x.HomeId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Home>().Property(x => x.Id).ValueGeneratedNever();
         b.Entity<Home>().Property(x => x.PowerSource).HasDefaultValue(HouseholdPowerSources.WholeHouseMeter);
         b.Entity<Device>().Property(x => x.Id).ValueGeneratedNever();

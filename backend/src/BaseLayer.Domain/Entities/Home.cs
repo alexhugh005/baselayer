@@ -3,7 +3,10 @@ namespace BaseLayer.Domain.Entities;
 public sealed class Home
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public string GridOutageRisk { get; set; } = "low";
     public DateTime? LastRestoreUtc { get; set; }
+    public bool AnomalySavingsEnabled { get; set; }
+    public List<UsageAnomaly> Anomalies { get; set; } = [];
     public bool SmartPowerOffEnabled { get; set; }
     public string? SmartPowerOffEventId { get; set; }
     public string OwnerId { get; set; } = "";
@@ -22,8 +25,12 @@ public sealed class Home
     {
         get; set;
     }
+    public string EvVehiclesJson { get; set; } = "[]";
+    public string EvBatterySensorsJson { get; set; } = "[]";
     public string CurrentControlsJson { get; set; } = "[]";
     public string CircuitPrioritiesJson { get; set; } = "[]";
+    public string PowerSupplyJson { get; set; } = "[]";
+    public string OutageRecoveryJson { get; set; } = "{}";
     public string SensorsJson { get; set; } = "[]";
     public DateTime? LastSeenUtc
     {
@@ -53,6 +60,10 @@ public static class ShutoffLevels
 }
 public sealed class Device
 {
+    public string? Category { get; set; }
+    public double? StandardWattsOverride { get; set; }
+    public bool StandardPowerAnomalyActive { get; set; }
+    public string? EvBatterySettingsJson { get; set; }
     public string? EvCurrentEntityId { get; set; }
     public double EvWattsPerAmp { get; set; } = 240;
     public int PowerSensorRevision { get; set; }
@@ -105,6 +116,13 @@ public sealed class OAuthState
 }
 public sealed class DeviceCommand
 {
+    public bool StartCharge { get; set; }
+    public DateTime? ChargeStartSentUtc { get; set; }
+    public string? EvVehicleId { get; set; }
+    public string? ChargeLimitControlEntityId { get; set; }
+    public double? ChargeLimitPercent { get; set; }
+    public Guid? AnomalyId { get; set; }
+    public string? OutageEventId { get; set; }
     public string? PriorityControlEntityId { get; set; }
     public string? CircuitPriority { get; set; }
     public string? CurrentControlEntityId { get; set; }

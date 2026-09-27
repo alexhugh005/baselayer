@@ -73,3 +73,26 @@ failure by the service. Failures and invalid readings return 502 with a generic
 battery-specific problem response; they never silently fall back to simulation.
 Preserve request cancellation. Any retry or caching policy belongs in the external
 adapter and must preserve the actual observation timestamp.
+
+## Local PanelBench battery
+
+The outage lab can opt into the native PanelBench battery instead of the
+constant-load demonstration:
+
+```json
+{
+  "Battery": {
+    "PanelBench": {
+      "Enabled": true,
+      "HomeAssistantOrigin": "http://localhost:8123"
+    }
+  }
+}
+```
+
+Restart the API after changing this setting. The adapter reads the loopback
+PanelBench health endpoint on port 18081 and only serves homes paired to the
+configured HA origin. The returned telemetry still has `isSimulated: true`, but
+charge now follows the native simulated battery supplying actual lab loads.
+Unavailable or malformed readings produce an error, never a fallback. The
+constant-load provider remains the default when this option is absent.

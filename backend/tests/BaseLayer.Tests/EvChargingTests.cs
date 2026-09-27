@@ -180,7 +180,7 @@ public sealed partial class PlatformTests
     [InlineData(690, 1, 7)]
     public void EvCalculationUsesElectricalRatingAndRoundsDown(double wattsPerAmp, double step, double expected)
     {
-        var home = new Home { SmartPowerOffEnabled = true, HouseholdWatts = 13680 };
+        var home = new Home { GridOutageRisk = GridOutageRisk.Medium, SmartPowerOffEnabled = true, HouseholdWatts = 13680 };
         var device = new Device { Present = true, Allowed = true, State = "on", ShutoffLevel = "Anytime", PowerWatts = 7680,
             EvCurrentEntityId = "number.ev", EvWattsPerAmp = wattsPerAmp };
         var result = EvChargingPolicy.Reduction(home, device, new("number.ev", "EV", 32, 6, 48, step), 11000);

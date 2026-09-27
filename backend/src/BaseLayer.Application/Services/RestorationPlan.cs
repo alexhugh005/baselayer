@@ -25,7 +25,7 @@ public sealed class PowerOnRestoration : IRestorationStrategy
         !device.EntityId.StartsWith("climate.") && device.State == "off" && device.RestoreEntry is { PowerOn: true } entry &&
         home.HouseholdWatts is { } current && double.IsFinite(current) && current >= 0 &&
         entry.EstimatedWatts is { } estimate && double.IsFinite(estimate) && estimate > 0 &&
-        current + estimate + Math.Max(500, estimate * 0.1) < limitWatts;
+        (home.GridOutageRisk == GridOutageRisk.Low || current + estimate + Math.Max(500, estimate * 0.1) < limitWatts);
 
     public RestorationPlan? Plan(Home home, Device device, DateTime now, double limitWatts)
     {

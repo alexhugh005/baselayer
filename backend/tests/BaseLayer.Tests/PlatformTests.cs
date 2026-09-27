@@ -13,13 +13,19 @@ public sealed partial class PlatformTests : IDisposable
     private readonly PlatformDbContext db;
     private readonly FakeProvider provider = new();
     private readonly FakeClock clock = new();
+    private readonly FakeGridOutageDetection gridRisk = new();
     private readonly PlatformService service;
+    private sealed class FakeGridOutageDetection : IGridOutageDetectionService
+    {
+        public string Risk { get; set; } = GridOutageRisk.Medium;
+        public Task<string> GetRiskAsync(Guid homeId) => Task.FromResult(Risk);
+    }
     public PlatformTests()
     {
         db = new(new DbContextOptionsBuilder<PlatformDbContext>().UseSqlite("Data Source=:memory:").Options);
         db.Database.OpenConnection();
         db.Database.EnsureCreated();
-        service = new(new PlatformRepository(db, new DatabaseGate()), provider, new PlainProtector(), clock, new HomeOperationGate(), new UsageLimitReachedService());
+        service = new(new PlatformRepository(db, new DatabaseGate()), provider, new PlainProtector(), clock, new HomeOperationGate(), new UsageLimitReachedService(), gridRisk);
     }
     private async Task<HomeDto> Connect()
     {
@@ -150,7 +156,7 @@ public sealed partial class PlatformTests : IDisposable
         await service.PollAsync(home.Id);
         var recommender = new RecordingUsageLimitService();
         var platform = new PlatformService(new PlatformRepository(db, new DatabaseGate()), provider,
-            new PlainProtector(), clock, new HomeOperationGate(), recommender);
+            new PlainProtector(), clock, new HomeOperationGate(), recommender, gridRisk);
         var result = (await platform.HomesAsync("alice"))[0];
         Assert.Equal(1, recommender.Calls);
         Assert.Equal(13000, recommender.CurrentWatts);
@@ -445,7 +451,7 @@ public sealed partial class PlatformTests : IDisposable
         PlatformDbContext NewContext() => new(new DbContextOptionsBuilder<PlatformDbContext>()
             .UseSqlite(db.Database.GetDbConnection()).Options);
         PlatformService NewService(PlatformDbContext context) => new(new PlatformRepository(context, databaseGate),
-            provider, new PlainProtector(), clock, gate, new UsageLimitReachedService());
+            provider, new PlainProtector(), clock, gate, new UsageLimitReachedService(), gridRisk);
         using (var request = NewContext())
         {
             var commands = await NewService(request).TurnOffAsync("alice", home.Id, new(["switch.dryer"], "scoped"));
@@ -527,6 +533,13 @@ public sealed partial class PlatformTests : IDisposable
             if (Fail) throw new HttpRequestException();
             return Task.CompletedTask;
         }
+        public List<(string EntityId, double Percent)> ChargeLimitSends = [];
+        public Task SetChargeLimitAsync(string o, ProviderTokens t, string id, double percent)
+        {
+            ChargeLimitSends.Add((id, percent));
+            if (Fail) throw new HttpRequestException();
+            return Task.CompletedTask;
+        }
         public List<(string EntityId, double Amps)> CurrentSends = [];
         public Task SetCurrentAsync(string o, ProviderTokens t, string id, double amps)
         {
@@ -539,6 +552,12 @@ public sealed partial class PlatformTests : IDisposable
             TurnOns++;
             if (Fail) throw new HttpRequestException();
             return Task.CompletedTask;
+        }
+        public List<(string EntityId, string State)> DeviceRestores = [];
+        public Task RestoreDeviceStateAsync(string o, ProviderTokens t, string id, string state)
+        {
+            DeviceRestores.Add((id, state));
+            return TurnOnAsync(o, t, id);
         }
         public Task RevokeAsync(string o, ProviderTokens t)
         {

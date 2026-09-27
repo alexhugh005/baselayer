@@ -77,7 +77,7 @@ public static class SmartUsagePolicy
         var blocked = home.Commands.Any(c => !CommandPolicy.Terminal(c)) ? "Wait for pending device changes to finish."
             : battery.StoredEnergyKwh <= 0 ? "The battery is empty."
             : projected > BatteryLimitWatts ? "This selection exceeds the 11 kW limit per battery. Choose a longer runtime."
-            : home.SmartPowerOffEnabled && projected == BatteryLimitWatts ? "Smart Shutoff activates at 11 kW. Choose a longer runtime to stay below its threshold."
+            : home.SmartPowerOffEnabled && GridOutageRisk.RequiresReduction(home.GridOutageRisk) && projected == BatteryLimitWatts ? "Smart Shutoff activates at 11 kW. Choose a longer runtime to stay below its threshold."
             : loads.Count == 0 ? "No measured, permitted devices are available to plan." : null;
         var revisionData = new { home.Id, home.HouseholdWatts, Target = target,
             Devices = home.Devices.OrderBy(d => d.EntityId, StringComparer.Ordinal).Select(d => new
