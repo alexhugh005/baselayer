@@ -6,8 +6,8 @@ Models trained on datasets from [`baselayer_data`](../baselayer_data/).
 
 [`austin_outage/`](austin_outage/) trains an XGBoost classifier that rates each
 operating day's Austin grid-outage risk as `low`, `medium` or `high`, using
-the hourly ERCOT feature table `dataset/austin-outage/hourly.parq` built by
-`python -m baselayer_data austin-outage build`.
+the hourly ERCOT feature table `$DATA_ROOT/dataset/austin-outage/hourly.parq`
+built by `python -m baselayer_data austin-outage build`.
 
 | Module | What it does |
 | --- | --- |
@@ -35,6 +35,45 @@ On macOS, xgboost also needs the OpenMP runtime (`brew install libomp`).
 falls back to CPU otherwise. Outputs go to a new temp directory
 (`austin_outage_run_*`) unless `--out-dir` is given. Run `train --help` for
 split, threshold and XGBoost options.
+
+### Features
+
+`--feature-set` picks which columns of `hourly.parq` the model sees:
+
+| Set | Uses | For |
+| --- | --- | --- |
+| `day_ahead` (default) | Day-ahead load forecast, outage capacity posted before midnight, 1–3 day lags, `month`, `day_of_week`, derived features | Rating a day's risk before it starts |
+| `nowcast` | `day_ahead` plus same-day actual load, forecast error, `offline_to_load`, real-time price and system lambda | Detecting trouble during the day |
+
+Same-day actuals describe an outage rather than predict it: on Uri's
+load-shed days actual load ran up to 38% under forecast because ERCOT was
+cutting it, so `nowcast` scores will look much better on Uri than a
+forecast can.
+
+Never used as features:
+
+- `offline_new_equip_mw`: new equipment not yet in service, not outages.
+- `offline_south_mw` and its lags: ERCOT's zonal outage file starts
+  2021-06-03, so these are null for all of 2020 and Uri and would let the
+  model learn the era instead of the grid.
+- `hour_ending`, `dst_flag`, `price_intervals`, `sced_runs`, label columns
+  (`META_COLS` in `modeling.py`).
+
+Derived features, added by `load_table()` from existing columns (all known
+before the day starts):
+
+| Column | Meaning |
+| --- | --- |
+| `fcst_total_mw_day_max`, `fcst_south_c_mw_day_max` | Day's forecast peak, statewide and South Central |
+| `fcst_total_mw_ramp` | Hour-over-hour change in the statewide forecast |
+| `fcst_south_c_share` | South Central share of forecast load |
+| `offline_to_fcst` | Offline capacity / forecast load (day-ahead `offline_to_load`) |
+| `fcst_peak_vs_lag1_pct` | Forecast peak vs. yesterday's actual peak, % |
+| `offline_mw_change_lag1` | Offline capacity now vs. yesterday's average |
+| `load_total_mw_max_trend_3d` | Yesterday's peak minus the peak 3 days ago |
+| `price_rt_max_max_3d`, `lambda_max_max_3d`, `offline_to_load_max_3d` | Worst value over the last 3 days |
+
+`--drop-cols` removes further columns from either set.
 
 ### How it trains
 
@@ -82,3 +121,10 @@ Checked in order, on daily probabilities:
   that ERCOT data doesn't show, so expect weak `high` recall on it.
 - With the microburst held out, CV has two folds (Uri and the 2023 ice
   storm). Uri is the only supply-driven `high` event.
+- Lag features on Uri's 2nd–4th days include the previous day's load shed
+  (for example `fcst_peak_vs_lag1_pct` reaches 34% on 2021-02-18). That is
+  known before the day starts, so it isn't leakage, but it makes those days
+  easy.
+- Nothing in the ERCOT data sees local storm damage (the 2023 ice storm,
+  the 2025 microburst). Weather features (wind gust, freezing rain, ice
+  accretion near Austin) would need a new `baselayer_data` source.

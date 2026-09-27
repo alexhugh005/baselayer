@@ -7,9 +7,11 @@ operating hour with
     hour_ending   1-24 (ERCOT convention)
     label         "low" | "medium" | "high", constant within a day
     event         high-event name (uri_2021, mara_2023, microburst_2025), or empty
-    <features>    every other numeric column
+    <features>    numeric columns, chosen by FEATURE_SETS
 
-Columns in META_COLS are never used as features.
+load_table() adds DERIVED columns computed from existing ones. Columns in
+META_COLS and EXCLUDED_FEATURES are never features; SAME_DAY_ACTUALS are
+only used by the "nowcast" feature set.
 """
 
 from __future__ import annotations
@@ -50,6 +52,38 @@ META_COLS = {
     "price_intervals",
     "sced_runs",
 }
+
+# Measured during the operating day itself. On load-shed days these describe
+# the outage rather than the risk before it (Uri load ran ~38% under the
+# day-ahead forecast because ERCOT was shedding it).
+SAME_DAY_ACTUALS = {
+    "load_south_c_mw",
+    "load_total_mw",
+    "fcst_err_south_c_mw",
+    "fcst_err_south_c_pct",
+    "fcst_err_total_mw",
+    "fcst_err_total_pct",
+    "offline_to_load",
+    "price_rt_mean",
+    "price_rt_max",
+    "lambda_mean",
+    "lambda_max",
+}
+# Never features:
+# - offline_new_equip_mw is new equipment not yet in service, not outages.
+# - offline_south_mw exists only in ERCOT's zonal outage file format, which
+#   starts 2021-06-03, so its nulls mark "before mid-2021" (all of Uri).
+EXCLUDED_FEATURES = {"offline_new_equip_mw"}
+EXCLUDED_PREFIXES = ("offline_south_mw",)
+FEATURE_SETS = {
+    # Known before the operating day starts: day-ahead forecast, outage
+    # capacity posted before midnight, 1-3 day lags, calendar, DERIVED.
+    "day_ahead": "exclude SAME_DAY_ACTUALS",
+    # Adds same-day actuals, for real-time detection rather than forecasting.
+    "nowcast": "include SAME_DAY_ACTUALS",
+}
+DEFAULT_FEATURE_SET = "day_ahead"
+
 # Labeled days closer than this are one episode, so lag features never
 # straddle a train/validation boundary.
 EPISODE_GAP_DAYS = 3
@@ -82,22 +116,82 @@ def load_table(path):
         raise ValueError(f"unknown labels: {sorted(unknown)}")
     if "event" not in df.columns:
         df["event"] = None
+    df = add_derived_features(df)
     df["group"] = assign_groups(df)
     order = ["oper_day", "hour_ending"] if "hour_ending" in df else ["oper_day"]
     return df.sort_values(order).reset_index(drop=True)
 
 
-def feature_columns(df, drop=()):
+def add_derived_features(df):
+    """Add features built from existing columns; skips any whose inputs are absent.
+
+    All of them use only information known before the operating day starts.
+    """
+    df = df.copy()
+
+    def has(columns):
+        return set(columns) <= set(df.columns)
+
+    def ratio(a, b):
+        return df[a] / df[b].where(df[b] != 0)
+
+    if has({"fcst_total_mw"}):
+        # The whole day's forecast is posted the morning before.
+        df["fcst_total_mw_day_max"] = df.groupby("oper_day")["fcst_total_mw"].transform("max")
+        df["fcst_total_mw_ramp"] = df.groupby("oper_day")["fcst_total_mw"].diff()
+    if has({"fcst_south_c_mw"}):
+        df["fcst_south_c_mw_day_max"] = df.groupby("oper_day")["fcst_south_c_mw"].transform("max")
+    if has({"fcst_south_c_mw", "fcst_total_mw"}):
+        df["fcst_south_c_share"] = ratio("fcst_south_c_mw", "fcst_total_mw")
+    if has({"offline_mw", "fcst_total_mw"}):
+        # Day-ahead version of offline_to_load.
+        df["offline_to_fcst"] = ratio("offline_mw", "fcst_total_mw")
+    if has({"fcst_total_mw_day_max", "load_total_mw_max_lag1"}):
+        # Forecast peak vs. yesterday's actual peak: cold snaps and heat waves jump.
+        df["fcst_peak_vs_lag1_pct"] = (ratio("fcst_total_mw_day_max", "load_total_mw_max_lag1") - 1) * 100
+    if has({"offline_mw", "offline_mw_mean_lag1"}):
+        df["offline_mw_change_lag1"] = df["offline_mw"] - df["offline_mw_mean_lag1"]
+    if has({"load_total_mw_max_lag1", "load_total_mw_max_lag3"}):
+        df["load_total_mw_max_trend_3d"] = df["load_total_mw_max_lag1"] - df["load_total_mw_max_lag3"]
+    for base in ("price_rt_max_max", "lambda_max_max", "offline_to_load_max"):
+        lags = [f"{base}_lag{i}" for i in (1, 2, 3)]
+        if has(set(lags)):
+            df[f"{base}_3d"] = df[lags].max(axis=1)
+    return df
+
+
+DERIVED = (
+    "fcst_total_mw_day_max",
+    "fcst_total_mw_ramp",
+    "fcst_south_c_mw_day_max",
+    "fcst_south_c_share",
+    "offline_to_fcst",
+    "fcst_peak_vs_lag1_pct",
+    "offline_mw_change_lag1",
+    "load_total_mw_max_trend_3d",
+    "price_rt_max_max_3d",
+    "lambda_max_max_3d",
+    "offline_to_load_max_3d",
+)
+
+
+def feature_columns(df, drop=(), feature_set=DEFAULT_FEATURE_SET):
+    """Numeric feature columns for a feature set (see FEATURE_SETS)."""
+    if feature_set not in FEATURE_SETS:
+        raise ValueError(f"unknown feature set {feature_set!r}; choose from {sorted(FEATURE_SETS)}")
+    skip = META_COLS | EXCLUDED_FEATURES | set(drop)
+    if feature_set == "day_ahead":
+        skip |= SAME_DAY_ACTUALS
     cols = [
         c
         for c in df.columns
-        if c not in META_COLS
-        and c not in set(drop)
+        if c not in skip
+        and not c.startswith(EXCLUDED_PREFIXES)
         and pd.api.types.is_numeric_dtype(df[c])
         and not pd.api.types.is_bool_dtype(df[c])
     ]
     if not cols:
-        raise ValueError("no numeric feature columns found")
+        raise ValueError(f"no numeric feature columns found for feature set {feature_set!r}")
     return cols
 
 
