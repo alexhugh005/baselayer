@@ -7,6 +7,9 @@ low / medium / high. The first request for a day pulls ERCOT data (a minute
 or two, paced under ERCOT's rate limit) and caches the result in memory and
 under $DATA_ROOT/serve/. A background task keeps today's result current.
 
+GET /v1/demo/case-1 and /v1/demo/case-2 score fixed sequences of real
+historical hours (demo/demo_cases.json) for demos; no ERCOT calls.
+
 Environment:
     MODEL_DIR         run directory with model.json, run_config.json and
                       classification_thresholds.json (default: ./model)
@@ -32,7 +35,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from baselayer_data.paths import data_root
-from baselayer_model.api import live_features
+from baselayer_model.api import demo, live_features
 from baselayer_model.api.artifacts import DEFAULT_DIR, load_run
 from baselayer_model.api.predictor import score_day
 
@@ -73,6 +76,34 @@ class OutageRisk(BaseModel):
     pull_errors: dict[str, str]
     stale: bool = False
     hourly: list[HourlyRisk]
+
+
+class DemoSource(BaseModel):
+    oper_day: dt.date
+    hour_ending: int
+    label: str
+    event: str | None
+    split: str
+
+
+class DemoHour(BaseModel):
+    hour_ending: int
+    risk: str
+    p_low: float
+    p_medium: float
+    p_high: float
+    p_elevated: float
+    source: DemoSource
+    features: dict[str, float | None] | None = None
+
+
+class DemoCase(BaseModel):
+    case: str
+    description: str
+    model_version: str
+    thresholds: dict[str, float]
+    sequence: list[str]
+    hourly: list[DemoHour]
 
 
 def now_central():
@@ -220,6 +251,18 @@ def create_app(run_dir=None, root=None, fetch=default_fetch, build=live_features
         if day > today + dt.timedelta(days=1):
             raise HTTPException(422, "the day-ahead forecast only reaches tomorrow")
         return await service.risk(day, refresh)
+
+    features_query = Query(False, description="include each hour's 69 model inputs")
+
+    @app.get("/v1/demo/case-1", response_model=DemoCase, response_model_exclude_none=True)
+    async def demo_case_1(include_features: bool = features_query):
+        """Low, low, medium, medium, low: held-out test hours around the June 2021 near-miss."""
+        return demo.score_case("case_1", app.state.service.run, include_features)
+
+    @app.get("/v1/demo/case-2", response_model=DemoCase, response_model_exclude_none=True)
+    async def demo_case_2(include_features: bool = features_query):
+        """Low, low, low, medium, high, low: Winter Storm Uri (training hours)."""
+        return demo.score_case("case_2", app.state.service.run, include_features)
 
     return app
 

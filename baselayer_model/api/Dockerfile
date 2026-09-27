@@ -21,6 +21,7 @@ COPY baselayer_data/ baselayer_data/
 COPY baselayer_model/__init__.py baselayer_model/
 COPY baselayer_model/austin_outage/ baselayer_model/austin_outage/
 COPY baselayer_model/api/*.py baselayer_model/api/
+COPY baselayer_model/api/demo/__init__.py baselayer_model/api/demo/demo_cases.json baselayer_model/api/demo/
 # The run directory served; pass another train.py output to swap models.
 ARG MODEL_RUN=baselayer_model/api/model
 COPY ${MODEL_RUN}/model.json ${MODEL_RUN}/run_config.json ${MODEL_RUN}/classification_thresholds.json /app/model/
