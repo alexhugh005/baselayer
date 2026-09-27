@@ -1,0 +1,15 @@
+{
+  "watts_before_restore": 15450.4,
+  "confirmed_relays": {
+    "living_room": "CLOSED",
+    "office": "CLOSED",
+    "kitchen": "CLOSED",
+    "essentials": "CLOSED",
+    "laundry": "CLOSED",
+    "garage": "CLOSED",
+    "hvac": "CLOSED",
+    "water_heater": "CLOSED"
+  },
+  "passed": true,
+  "final_watts": 194.4
+}

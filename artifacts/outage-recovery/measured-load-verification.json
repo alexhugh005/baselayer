@@ -1,0 +1,326 @@
+{
+  "result": {
+    "LastGridUtc": "2026-09-26T21:04:31.670958Z",
+    "Baseline": [
+      {
+        "Devices": [
+          {
+            "EntityId": "climate.virtual_room_thermostat",
+            "Name": "Virtual Room Thermostat",
+            "TargetState": "heat",
+            "Status": "waiting",
+            "CommandId": null
+          }
+        ],
+        "EntityId": "switch.span_panel_central_hvac_breaker",
+        "Name": "Span Panel Central HVAC Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 3008,
+        "Status": "waiting",
+        "CommandId": null
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_essential_electronics_breaker",
+        "Name": "Span Panel Essential Electronics Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 500,
+        "Status": "waiting",
+        "CommandId": null
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_garage_ev_charger_breaker",
+        "Name": "Span Panel Garage EV Charger Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 7680,
+        "Status": "waiting",
+        "CommandId": null
+      },
+      {
+        "Devices": [
+          {
+            "EntityId": "switch.virtual_refrigerator",
+            "Name": "Virtual Refrigerator",
+            "TargetState": "on",
+            "Status": "waiting",
+            "CommandId": null
+          }
+        ],
+        "EntityId": "switch.span_panel_kitchen_outlets_breaker",
+        "Name": "Span Panel Kitchen Outlets Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 2553,
+        "Status": "waiting",
+        "CommandId": null
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_laundry_dryer_breaker",
+        "Name": "Span Panel Laundry Dryer Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 5001,
+        "Status": "waiting",
+        "CommandId": null
+      },
+      {
+        "Devices": [
+          {
+            "EntityId": "fan.virtual_ceiling_fan",
+            "Name": "Virtual Ceiling Fan",
+            "TargetState": "on",
+            "Status": "waiting",
+            "CommandId": null
+          },
+          {
+            "EntityId": "light.virtual_living_room_light",
+            "Name": "Virtual Living Room Light",
+            "TargetState": "on",
+            "Status": "waiting",
+            "CommandId": null
+          }
+        ],
+        "EntityId": "switch.span_panel_living_room_breaker",
+        "Name": "Span Panel Living Room Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 73,
+        "Status": "waiting",
+        "CommandId": null
+      },
+      {
+        "Devices": [
+          {
+            "EntityId": "switch.virtual_desk_lamp",
+            "Name": "Virtual Desk Lamp",
+            "TargetState": "on",
+            "Status": "waiting",
+            "CommandId": null
+          }
+        ],
+        "EntityId": "switch.span_panel_office_outlets_breaker",
+        "Name": "Span Panel Office Outlets Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 1516,
+        "Status": "waiting",
+        "CommandId": null
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_water_heater_breaker",
+        "Name": "Span Panel Water Heater Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 4502,
+        "Status": "waiting",
+        "CommandId": null
+      }
+    ],
+    "EventId": "55da896ef1df4b42b90995663472fc8e",
+    "StartedUtc": "2026-09-26T21:04:34.685384Z",
+    "LastStepUtc": "2026-09-26T21:07:45.521704Z",
+    "Status": "complete",
+    "MeasuredWatts": 399.95,
+    "ReservedWatts": 399.95,
+    "Circuits": [
+      {
+        "Devices": [
+          {
+            "EntityId": "climate.virtual_room_thermostat",
+            "Name": "Virtual Room Thermostat",
+            "TargetState": "heat",
+            "Status": "held",
+            "CommandId": "1d338c78-0f49-4cea-9ea5-3dd04b16ce39"
+          }
+        ],
+        "EntityId": "switch.span_panel_central_hvac_breaker",
+        "Name": "Span Panel Central HVAC Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 3008,
+        "Status": "restored",
+        "CommandId": "9c95d8b8-a318-4f6e-ac75-4b03068e5a55"
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_essential_electronics_breaker",
+        "Name": "Span Panel Essential Electronics Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 500,
+        "Status": "held",
+        "CommandId": null
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_garage_ev_charger_breaker",
+        "Name": "Span Panel Garage EV Charger Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 7680,
+        "Status": "restored",
+        "CommandId": "d248cff5-f546-4d43-9486-2277981e54d3"
+      },
+      {
+        "Devices": [
+          {
+            "EntityId": "switch.virtual_refrigerator",
+            "Name": "Virtual Refrigerator",
+            "TargetState": "on",
+            "Status": "restored",
+            "CommandId": "adaac671-6f6e-482a-9b04-862ec5148743"
+          }
+        ],
+        "EntityId": "switch.span_panel_kitchen_outlets_breaker",
+        "Name": "Span Panel Kitchen Outlets Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 2553,
+        "Status": "restored",
+        "CommandId": "1f51b7ff-04b0-445b-a83f-e35cc5af4700"
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_laundry_dryer_breaker",
+        "Name": "Span Panel Laundry Dryer Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 5001,
+        "Status": "restored",
+        "CommandId": "5c990f19-e54c-4945-9caf-c4b8345612ba"
+      },
+      {
+        "Devices": [
+          {
+            "EntityId": "fan.virtual_ceiling_fan",
+            "Name": "Virtual Ceiling Fan",
+            "TargetState": "on",
+            "Status": "restored",
+            "CommandId": "25bcf42e-ff54-4531-9ee3-0a43e5eaf9a3"
+          },
+          {
+            "EntityId": "light.virtual_living_room_light",
+            "Name": "Virtual Living Room Light",
+            "TargetState": "on",
+            "Status": "restored",
+            "CommandId": "215e68c4-29a8-41b7-becb-daa683aa0025"
+          }
+        ],
+        "EntityId": "switch.span_panel_living_room_breaker",
+        "Name": "Span Panel Living Room Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 73,
+        "Status": "restored",
+        "CommandId": "ab6f091d-d3d6-4ded-8a14-279be75db953"
+      },
+      {
+        "Devices": [
+          {
+            "EntityId": "switch.virtual_desk_lamp",
+            "Name": "Virtual Desk Lamp",
+            "TargetState": "on",
+            "Status": "restored",
+            "CommandId": "b871c6cf-5506-46f8-84fd-4acea403d36f"
+          }
+        ],
+        "EntityId": "switch.span_panel_office_outlets_breaker",
+        "Name": "Span Panel Office Outlets Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 1516,
+        "Status": "restored",
+        "CommandId": "f7de21ab-c436-40e9-a8f9-1cb3d93f9543"
+      },
+      {
+        "Devices": [],
+        "EntityId": "switch.span_panel_water_heater_breaker",
+        "Name": "Span Panel Water Heater Breaker",
+        "WasOn": true,
+        "EstimatedWatts": 4502,
+        "Status": "restored",
+        "CommandId": "6ea218d4-0810-4257-803d-d9935cfcbc6c"
+      }
+    ]
+  },
+  "commands": [
+    {
+      "entityId": "switch.span_panel_living_room_breaker",
+      "createdUtc": "2026-09-26 21:05:07.811456",
+      "estimatedWatts": 73.0,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "fan.virtual_ceiling_fan",
+      "createdUtc": "2026-09-26 21:05:17.858228",
+      "estimatedWatts": null,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "light.virtual_living_room_light",
+      "createdUtc": "2026-09-26 21:05:26.897492",
+      "estimatedWatts": null,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.span_panel_office_outlets_breaker",
+      "createdUtc": "2026-09-26 21:05:35.943903",
+      "estimatedWatts": 1516.0,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.virtual_desk_lamp",
+      "createdUtc": "2026-09-26 21:05:45.982338",
+      "estimatedWatts": null,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.span_panel_kitchen_outlets_breaker",
+      "createdUtc": "2026-09-26 21:05:55.028814",
+      "estimatedWatts": 2553.0,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.virtual_refrigerator",
+      "createdUtc": "2026-09-26 21:06:05.086177",
+      "estimatedWatts": null,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.span_panel_central_hvac_breaker",
+      "createdUtc": "2026-09-26 21:06:14.138387",
+      "estimatedWatts": 3008.0,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "climate.virtual_room_thermostat",
+      "createdUtc": "2026-09-26 21:06:24.196516",
+      "estimatedWatts": null,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.span_panel_water_heater_breaker",
+      "createdUtc": "2026-09-26 21:06:33.238819",
+      "estimatedWatts": 4502.0,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.span_panel_laundry_dryer_breaker",
+      "createdUtc": "2026-09-26 21:06:43.320531",
+      "estimatedWatts": 5001.0,
+      "status": "Confirmed"
+    },
+    {
+      "entityId": "switch.span_panel_garage_ev_charger_breaker",
+      "createdUtc": "2026-09-26 21:07:41.515944",
+      "estimatedWatts": 7680.0,
+      "status": "Confirmed"
+    }
+  ],
+  "gapsSeconds": [
+    10.046772,
+    9.039264,
+    9.046411,
+    10.038435,
+    9.046476,
+    10.057363,
+    9.05221,
+    10.058129,
+    9.042303,
+    10.081712,
+    58.195413
+  ],
+  "peakEstimateSumWatts": 24333.0,
+  "note": "Manual essential-circuit override is held. Garage resumed after stopping demo thermostat lowered measured load; thermostat remains off."
+}

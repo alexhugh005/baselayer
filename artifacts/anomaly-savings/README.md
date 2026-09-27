@@ -1,0 +1,1 @@
+Browser verification uses an isolated frontend fixture, not a connected home. The dashboard sample shows 4 kWh and $0.64 estimated savings from one confirmed automatic shutoff. The settings screenshot shows the anomaly switch after toggling it off. No real device commands were issued during this UI check.

@@ -1,0 +1,24 @@
+{
+  "before": {
+    "select.span_panel_living_room_circuit_priority": "never",
+    "select.span_panel_office_outlets_circuit_priority": "never",
+    "select.span_panel_kitchen_outlets_circuit_priority": "never",
+    "select.span_panel_essential_electronics_circuit_priority": "never",
+    "select.span_panel_laundry_dryer_circuit_priority": "off_grid",
+    "select.span_panel_garage_ev_charger_circuit_priority": "off_grid",
+    "select.span_panel_central_hvac_circuit_priority": "never",
+    "select.span_panel_water_heater_circuit_priority": "off_grid"
+  },
+  "after": {
+    "select.span_panel_living_room_circuit_priority": "never",
+    "select.span_panel_office_outlets_circuit_priority": "never",
+    "select.span_panel_kitchen_outlets_circuit_priority": "never",
+    "select.span_panel_essential_electronics_circuit_priority": "never",
+    "select.span_panel_laundry_dryer_circuit_priority": "off_grid",
+    "select.span_panel_garage_ev_charger_circuit_priority": "off_grid",
+    "select.span_panel_central_hvac_circuit_priority": "never",
+    "select.span_panel_water_heater_circuit_priority": "off_grid"
+  },
+  "outageState": "on",
+  "result": "all eight settings unchanged after configuration reload"
+}
