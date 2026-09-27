@@ -15,3 +15,15 @@
 *.tsbuildinfo
 /dataset/
 /logs/
+
+# Local Home Assistant backups can contain authentication credentials.
+/docs/home-assistant/backups/*.zip
+
+# Runtime logs and intermediate demo rendering files.
+/artifacts/*.log
+/artifacts/battery-outage-walkthrough/frames/
+/artifacts/battery-outage-walkthrough/rendered-*/
+/artifacts/battery-outage-walkthrough/scene-*.mp4
+/artifacts/battery-outage-walkthrough/scene-*.txt
+/artifacts/battery-outage-walkthrough/caption-*.txt
+/artifacts/battery-outage-walkthrough/segments.txt
