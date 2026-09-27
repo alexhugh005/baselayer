@@ -4,7 +4,62 @@ A React + .NET platform for monitoring home energy and approving device shutoffs
 Clerk handles user sign-in. Home Assistant connects through its native OAuth and
 REST APIs—no custom plugin is required.
 
-## Start Home Assistant
+## Start everything with Docker
+
+Install Git and Docker with Compose v2 (Docker Desktop includes Compose), then
+start Docker. Clone this repository and run one command from its root:
+
+```sh
+docker compose up --build -d --wait --wait-timeout 600
+```
+
+This builds and starts **Base Layer, its .NET API, Home Assistant, and PanelBench**.
+No local Node, .NET, Python, database installation, or configuration file is needed.
+The first build downloads dependencies and may take several minutes.
+
+1. Open **[Base Layer](http://localhost:5173)** and sign in through Clerk.
+2. Open **[Home Assistant](http://localhost:8123)** once to create your own account.
+3. In Base Layer, choose **Connect a home**, enter `http://localhost:8123`, and
+   authorize access. The virtual household and SPAN panel are already provisioned.
+
+The default uses this project's public Clerk development application. To use your
+own Clerk app, copy `.env.example` to `.env` and set both `CLERK_PUBLISHABLE_KEY` and
+`CLERK_ISSUER`, then rerun the startup command. These are public settings; no Clerk
+secret key is required. Sign-in still requires internet access.
+
+The frontend serves a compiled build and proxies `/api` to the API container.
+The API connects to HA and PanelBench over Docker's network, while HA authorization
+opens the browser-accessible localhost address. SQLite and token-encryption keys
+are stored together in the `app-data` named volume; lab accounts and state also
+persist in named volumes. The app is available only on this machine; HA is available
+on the LAN by default, as in the standalone lab.
+
+```sh
+docker compose ps                         # all four services should be healthy
+docker compose logs --tail 80             # diagnose startup problems
+docker compose down                       # stop, preserving accounts and data
+```
+
+Run the startup command again to resume or rebuild after pulling changes. Do not
+add `--volumes` to `down` unless you intend to erase the installation. Existing HA
+volumes retain their seeded configuration; see the [lab upgrade limitation](docs/home-assistant/portable/README.md#ports-and-persistence).
+
+If ports are already occupied (including by the standalone lab or `scripts/dev.sh`),
+set `APP_PORT`, `LAB_HA_PORT`, `LAB_PANEL_PORT`, and `LAB_HEALTH_PORT` in a root `.env`;
+see `.env.example`. The app's OAuth URLs follow these port settings automatically.
+Always open the app and connect HA using **localhost**, including the chosen ports.
+The full stack uses its own `baselayer` Compose project and fresh volumes; it does
+not import accounts or connected homes from an existing local installation.
+
+This setup is for local use with Clerk authentication enabled. The API runs in
+Development to permit the explicitly allowlisted local HTTP lab. The separate
+Python data collection/model-training tools are offline jobs, not services required
+by the app; their setup remains in `baselayer_data/` and `baselayer_model/`.
+
+Compose waits for dependency health checks before starting the API and frontend;
+see Docker's [startup-order documentation](https://docs.docker.com/compose/how-tos/startup-order/).
+
+## Start only Home Assistant
 
 Install Git and Docker with Compose v2 (Docker Desktop includes Compose), then
 start Docker. Internet access is required for the first build.
@@ -41,11 +96,11 @@ Run the startup command again to resume. Named volumes preserve the installation
 adding `--volumes` to `down` would erase it. A shareable standalone ZIP is available
 at [artifacts/energy-lab/energy-lab-compose.zip](artifacts/energy-lab/energy-lab-compose.zip).
 
-## Start Base Layer locally
+## Develop Base Layer without Docker
 
 Prerequisites: .NET 10 SDK, Node 24 LTS, npm, and a reachable Home Assistant instance
-(either the lab above or your existing installation). The Compose setup above
-starts Home Assistant and PanelBench; start the Base Layer frontend/API separately:
+(either the lab above or your existing installation). The standalone `compose.energy-lab.yaml`
+starts Home Assistant and PanelBench; for frontend/API hot reload, run:
 
 ```sh
 npm --prefix frontend ci
@@ -71,34 +126,40 @@ public signing keys, issuer, expiry and authorized origin.
 4. In **Device settings**, choose **Whole-house meter** or **Sum of device readings**. Similar device/sensor names are suggested for review;
    existing assignments are preserved and ambiguous matches stay unselected.
    Select device power sensors and a shutoff level for each device:
-   **Never** blocks all shutoffs, **Sometimes** requires your approval,
-   and **Anytime** permits automatic shutoffs when Smart Shutoff is enabled.
+   **Never** blocks all shutoffs. **Sometimes** requires approval at medium grid
+   outage risk and permits automatic shutoff at high risk. **Anytime** permits
+   automatic reductions at medium or high risk when Smart Shutoff is enabled.
    New devices default to Never; optionally default future devices to Sometimes.
 5. In **Device settings**, enable **Smart Shutoff and automatic restore** for each home you want managed.
-   At or above the 11 kW limit, the server selects the fewest measured Anytime
-   devices needed to get strictly below the limit, largest loads first. If those
-   loads cannot cover the reduction, it selects all eligible Anytime devices.
-6. After command confirmation and a fresh usage reading, any remaining overload
-   produces recommendations for the fewest Sometimes devices. Approve them with
-   **Device Recommendations → Turn Off**. If they cannot save enough power,
-   the app tells you to turn off additional appliances yourself to help the battery
-   return to a working state. This is usage guidance, not battery-state telemetry.
+   The grid outage detection service currently returns **low** for every home:
+   usage above 11 kW is allowed, with no automatic reduction or usage alert.
+6. At **medium** risk and at or above 11 kW, the server first tries to reduce an
+   Anytime EV's charging current, then selects the fewest measured Anytime devices
+   needed, largest loads first. After confirmation and fresh measurements, it
+   recommends all Sometimes devices needed to get below 11 kW. Notifications name
+   these devices; approve them with **Device Recommendations → Turn Off**.
+7. At **high** risk, the server also automatically shuts off Sometimes devices as
+   needed after Anytime reductions. Never devices stay excluded. If eligible loads
+   cannot save enough power, the app asks for additional manual reductions.
+
+See [grid outage detection](docs/grid-outage-detection.md) for the service contract,
+risk transitions, and restoration behavior.
 
 Smart Shutoff starts disabled, and existing control permissions become Sometimes
 (or Never when control was disabled). Devices without a valid positive power reading
 and thermostats are excluded from automatic shutoffs and recommendations. Thermostats
 retain their temperature settings. With Smart Shutoff disabled, measured permitted
-devices remain available for manual recommendations.
+devices remain available for manual recommendations at medium or high grid risk.
 
 Automatic commands appear in **Recent activity**, use the existing bounded retry and
 confirmation flow, and are not recreated for the same device during an uninterrupted
-high-usage event. A valid below-limit reading starts a new event next time usage rises.
-Disabling Smart Shutoff or changing a device away from Anytime stops future automatic
+high-usage event. A valid below-limit reading or low grid risk ends the event; a changed risk signal starts a new policy event.
+Disabling Smart Shutoff, removing device permission, or a risk downgrade stops ineligible automatic
 attempts; it cannot undo a command already sent. The server must remain running and
 connected to Home Assistant for automatic control.
 
-Confirmed Base Layer shutoffs enter the **Restore queue**, including approved
-Sometimes devices. The queue persists across server restarts and records each
+Base Layer shutoffs enter the **Restore queue** before dispatch, including approved
+and automatically managed Sometimes devices. Observed confirmation starts the off timer. The queue persists across server restarts and records each
 load's measured watts immediately before its first shutoff attempt. Devices already
 off are not added. Estimates without a valid positive reading are shown as unknown
 and cannot restore automatically. Old commands without saved estimates are not
@@ -119,7 +180,9 @@ that fits, allowing smaller loads to return while a larger one waits. It require
 at least 15 seconds off, 5 seconds of fresh readings with sufficient spare
 capacity, and at least 5 seconds between restorations. These shortened delays are
 **for the demo only**, not production restart settings. The estimate plus a buffer
-of the greater of 500 W or 10% of the estimate must fit strictly below the limit.
+of the greater of 500 W or 10% of the estimate must fit strictly below the limit
+at medium or high risk. At low risk, the queue can restore above 11 kW; restart
+and confirmation delays still apply.
 Only one restore command is active at a time; the next device waits for confirmation
 and another stable interval. Unknown readings, failed polls, and gaps over 20 seconds
 restart the stability window. Lost capacity pauses retries; failed/expired restores
@@ -133,15 +196,16 @@ power, not battery charge percentage or a guarantee about appliance startup surg
 [Historical fixture notes](docs/local-ha.md) document the virtual house used for
 local verification before the plugin folder was removed.
 
-Usage alerts appear for every connected home at or above its configured limit
+Usage alerts appear for every connected home at medium or high grid risk and at or above its configured limit
 (currently 11 kW), including homes not selected in the dashboard. Failed refreshes,
 offline homes, and unknown readings do not trigger alerts. Open **Settings** in the sidebar and turn **Browser notifications** on to opt in.
 Confirmed Smart Shutoff shutoffs also send a notification when enabled, including
 a reminder if more reduction is needed. Recent confirmations are deduplicated across
 page navigation; old activity is not replayed as notifications.
 The preference is saved per account in this browser. Permission is requested
-only when you turn the toggle on. Each home sends one notification per high-usage event;
-a valid reading below the limit rearms it. Turning notifications off keeps in-site
+only when you turn the toggle on. Action notifications wait for automatic reductions
+and are deduplicated until risk, status, or the recommended device list changes.
+A valid reading below the limit or low risk rearms them. Turning notifications off keeps in-site
 alerts active.
 
 Browser notifications require a supported browser and HTTPS (or localhost).

@@ -1,0 +1,72 @@
+name: baselayer
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Publishable browser key, not a secret. Override for your own Clerk app.
+        VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-pk_test_Ym9sZC1ib3hlci04MTI1LmNsZXJrLmFjY291bnRzLmRldiQ}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-5173}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/health]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      # Development permits the explicitly allowlisted local HTTP lab. Clerk stays on.
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      AllowedHosts: localhost;127.0.0.1;api
+      Clerk__Issuer: ${CLERK_ISSUER:-https://bold-boxer-8125.clerk.accounts.dev}
+      Clerk__AuthorizedParties__0: http://localhost:${APP_PORT:-5173}
+      HomeAssistant__AllowedOrigins__0: http://localhost:${LAB_HA_PORT:-8123}
+      # Replace the second development default too; connect with localhost consistently.
+      HomeAssistant__AllowedOrigins__1: http://localhost:${LAB_HA_PORT:-8123}
+      HomeAssistant__ClientId: http://localhost:${APP_PORT:-5173}/
+      HomeAssistant__RedirectUri: http://localhost:${APP_PORT:-5173}/oauth/home-assistant
+      HomeAssistant__Transport__PublicOrigin: http://localhost:${LAB_HA_PORT:-8123}
+      HomeAssistant__Transport__InternalOrigin: http://homeassistant:8123
+      Battery__PanelBench__Enabled: "true"
+      Battery__PanelBench__HomeAssistantOrigin: http://localhost:${LAB_HA_PORT:-8123}
+      Battery__PanelBench__HealthUrl: http://panelbench:18081/health
+    volumes:
+      - app-data:/app/data
+    depends_on:
+      homeassistant:
+        condition: service_healthy
+      panelbench:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://localhost:8080/health]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  homeassistant:
+    extends:
+      file: compose.energy-lab.yaml
+      service: homeassistant
+
+  panelbench:
+    extends:
+      file: compose.energy-lab.yaml
+      service: panelbench
+
+volumes:
+  app-data:
+  homeassistant:
+  panel-config:
+  panel-certs:
+  bridge-credentials:
