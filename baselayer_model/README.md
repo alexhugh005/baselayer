@@ -15,6 +15,9 @@ built by `python -m baselayer_data austin-outage build`.
 | [`train.py`](austin_outage/train.py) | Holds out a test split, runs leave-one-event-out CV, tunes thresholds, refits |
 | [`evaluate.py`](austin_outage/evaluate.py) | Scores the held-out test split of a finished run |
 
+[`api/`](api/) serves a trained run over HTTP on live ERCOT data (FastAPI,
+Docker); see its [README](api/README.md).
+
 ### Setup
 
 ```sh

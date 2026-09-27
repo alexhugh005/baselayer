@@ -1,0 +1,16 @@
+# Only the model API builds from the repository root (baselayer_model/api/Dockerfile).
+# Every other image builds from its own folder and ignores this file.
+**/.env
+**/.env.local
+**/__pycache__
+.git/
+.venv/
+dataset/
+logs/
+local-research/
+artifacts/
+backend/
+base-style-guide/
+docs/
+frontend/
+scripts/

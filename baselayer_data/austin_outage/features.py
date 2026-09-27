@@ -92,7 +92,9 @@ def outage_cap_hourly(raw):
     }
     totals = {}
     for kind, columns in zonal.items():
-        system = pd.to_numeric(df.get(f"Total{kind}MW"), errors="coerce")
+        # Recent files are zonal only and have no system-total column.
+        total = f"Total{kind}MW"
+        system = pd.to_numeric(df[total], errors="coerce") if total in df else pd.Series(np.nan, index=df.index)
         by_zone = _num(df, columns).sum(axis=1, min_count=1) if columns else np.nan
         totals[kind] = system.fillna(by_zone) if columns else system
     south = [c for c in ("TotalResourceMWZoneSouth", "TotalIRRMWZoneSouth") if c in df]
@@ -136,6 +138,10 @@ def price_hourly(raw):
 def lambda_hourly(raw):
     df = _read_days(raw / "lambda")
     stamps = pd.to_datetime(df["SCEDTimeStamp"], format="%m/%d/%Y %H:%M:%S")
+    # Newer files split SystemLambda into capped and uncapped; capped is the old value.
+    value = df["SystemLambda"] if "SystemLambda" in df else pd.Series(pd.NA, index=df.index)
+    if "CappedSystemLambda" in df:
+        value = value.fillna(df["CappedSystemLambda"])
     out = pd.DataFrame(
         {
             "oper_day": stamps.dt.date,
@@ -143,7 +149,7 @@ def lambda_hourly(raw):
             "hour_ending": stamps.dt.hour + 1,
             "dst_flag": df["RepeatedHourFlag"].eq("Y"),
             "stamp": stamps,
-            "lambda": pd.to_numeric(df["SystemLambda"]),
+            "lambda": pd.to_numeric(value),
         }
     ).drop_duplicates(["stamp", "dst_flag"])
     return out.groupby(KEY, as_index=False).agg(
