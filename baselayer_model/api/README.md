@@ -42,9 +42,22 @@ defaults to today in Central time and can be at most tomorrow;
   "data_as_of": {"forecast": "2026-09-25 09:30:00", "outage_cap": "2026-09-25 23:00:48"},
   "pull_errors": {},
   "stale": false,
-  "hourly": [{"hour_ending": 1, "p_low": 0.55, "p_medium": 0.25, "p_high": 0.2}]
+  "hourly": [
+    {"hour_ending": 1, "dst_flag": false, "risk": "low",
+     "p_low": 0.545, "p_medium": 0.251, "p_high": 0.204, "p_elevated": 0.455}
+  ]
 }
 ```
+
+- `hourly`: one entry per operating hour (hour ending 1–24, Central time;
+  `dst_flag` marks the repeated hour on the fall-back day). The model scores
+  each hour, and each hour gets its own `risk` from the same threshold
+  cascade as the day. The model was trained on hourly rows labeled with
+  their day's class and its thresholds were tuned on daily means, so hours
+  within a day differ only through the inputs that change by hour
+  (forecast load and offline capacity); expect a nearly flat profile.
+- `risk` and the top-level `p_*`: the day, i.e. the mean of the hourly
+  probabilities, as `evaluate.py` scores it.
 
 - `degraded`: a feature other than system lambda (null in 29.5% of training
   rows) is missing for every hour. Scoring still runs; XGBoost treats the
