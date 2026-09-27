@@ -27,10 +27,19 @@ def synthetic_hourly(seed=0):
                 "label": day.label,
                 "source": day.source,
                 "event": day.event or "",
+                # same-day actuals (nowcast only)
                 "load_south_c_mw": 9000 + 1500 * s + rng.normal(0, 1200),
                 "fcst_err_south_c_pct": 4 * s + rng.normal(0, 3),
                 "offline_to_load": 0.1 + 0.05 * s + rng.normal(0, 0.05),
                 "price_rt_max": np.exp(3 + 0.8 * s + rng.normal(0, 0.8)),
+                # known before the day starts
+                "fcst_total_mw": 50000 + 6000 * s + rng.normal(0, 4000),
+                "offline_mw": 15000 + 4000 * s + rng.normal(0, 3000),
+                "load_total_mw_max_lag1": 55000 + 2000 * s + rng.normal(0, 4000),
+                "price_rt_max_max_lag1": np.exp(4 + 0.8 * s + rng.normal(0, 0.8)),
+                # never features
+                "offline_new_equip_mw": 4000.0,
+                "offline_south_mw": np.nan if day.oper_day.year < 2022 else 5000.0,
                 "fcst_model": "E",
                 "sced_runs": 12,
             })
@@ -49,11 +58,45 @@ class ModelingTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def test_features_skip_meta_text_and_coverage_columns(self):
+    def test_day_ahead_features_skip_same_day_actuals(self):
         self.assertEqual(
             m.feature_columns(self.df),
-            ["load_south_c_mw", "fcst_err_south_c_pct", "offline_to_load", "price_rt_max"],
+            [
+                "fcst_total_mw",
+                "offline_mw",
+                "load_total_mw_max_lag1",
+                "price_rt_max_max_lag1",
+                "fcst_total_mw_day_max",
+                "fcst_total_mw_ramp",
+                "offline_to_fcst",
+                "fcst_peak_vs_lag1_pct",
+            ],
         )
+
+    def test_nowcast_adds_same_day_actuals(self):
+        nowcast = m.feature_columns(self.df, feature_set="nowcast")
+        extra = set(nowcast) - set(m.feature_columns(self.df))
+        self.assertEqual(
+            extra, {"load_south_c_mw", "fcst_err_south_c_pct", "offline_to_load", "price_rt_max"}
+        )
+
+    def test_misleading_columns_are_never_features(self):
+        for feature_set in m.FEATURE_SETS:
+            cols = m.feature_columns(self.df, feature_set=feature_set)
+            self.assertNotIn("offline_new_equip_mw", cols)
+            self.assertNotIn("offline_south_mw", cols)
+            self.assertNotIn("sced_runs", cols)
+
+    def test_derived_features_use_whole_day_forecast(self):
+        day = self.df[self.df["oper_day"] == self.df["oper_day"].iloc[0]]
+        self.assertTrue((day["fcst_total_mw_day_max"] == day["fcst_total_mw"].max()).all())
+        expected = (day["fcst_total_mw_day_max"] / day["load_total_mw_max_lag1"] - 1) * 100
+        self.assertTrue(np.allclose(day["fcst_peak_vs_lag1_pct"], expected))
+
+    def test_derived_features_skip_missing_inputs(self):
+        slim = m.add_derived_features(self.df[["oper_day", "hour_ending", "label", "event", "fcst_total_mw"]])
+        self.assertIn("fcst_total_mw_day_max", slim.columns)
+        self.assertNotIn("offline_to_fcst", slim.columns)
 
     def test_each_day_belongs_to_one_group(self):
         self.assertTrue((self.df.groupby("oper_day")["group"].nunique() == 1).all())

@@ -1,6 +1,6 @@
 """Train the Austin outage risk classifier (XGBoost, 3 classes).
 
-    python -m baselayer_model.austin_outage.train [--data dataset/austin-outage/hourly.parq]
+    python -m baselayer_model.austin_outage.train [--feature-set day_ahead|nowcast]
 
 Holds out a test split (one whole high event plus ~15% of other day groups)
 that this script never scores, runs leave-one-event-out CV on the rest while
@@ -31,12 +31,17 @@ log = logging.getLogger("baselayer_model.austin_outage.train")
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--data", help="hourly feature table, parquet or .csv (default: dataset/austin-outage/hourly.parq)")
+    p.add_argument("--data", help="hourly feature table, parquet or .csv (default: $DATA_ROOT/dataset/austin-outage/hourly.parq)")
     p.add_argument("--out-dir", help="output directory (default: new temp dir)")
     p.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto")
     p.add_argument("--test-event", help="high event to hold out for test (default: most recent)")
     p.add_argument("--test-frac", type=float, default=0.15, help="share of low/medium groups held out")
     p.add_argument("--seed", type=int, default=20260926)
+    p.add_argument(
+        "--feature-set", choices=sorted(m.FEATURE_SETS), default=m.DEFAULT_FEATURE_SET,
+        help="day_ahead: only data known before the day starts (default); "
+        "nowcast: also same-day actual load, forecast error, price and lambda",
+    )
     p.add_argument("--drop-cols", nargs="*", default=[], help="numeric columns to exclude as features")
     p.add_argument("--beta-high", type=float, default=2.0, help="F-beta for the high threshold (recall-leaning)")
     p.add_argument("--beta-medium", type=float, default=1.0)
@@ -159,8 +164,11 @@ def main(argv=None):
     log.info("outputs -> %s", out)
 
     df = m.load_table(data)
-    features = m.feature_columns(df, args.drop_cols)
-    log.info("%d rows, %d days, %d features", len(df), df["oper_day"].nunique(), len(features))
+    features = m.feature_columns(df, args.drop_cols, args.feature_set)
+    log.info(
+        "%d rows, %d days, %d features (feature set %s)",
+        len(df), df["oper_day"].nunique(), len(features), args.feature_set,
+    )
 
     test_groups = m.make_test_split(df, args.test_event, args.test_frac, args.seed)
     is_test = df["group"].isin(test_groups).to_numpy()
