@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { BatteryCharging, Car, Pencil, Plus, Zap } from "lucide-react";
+import { Car, Pencil, Plus, Zap } from "lucide-react";
 import type { Api } from "../../lib/api";
 import type { Command, Device, Home, EvVehicle } from "../../lib/types";
 import { Button } from "../../components/ui/Button";
@@ -159,6 +159,15 @@ export function EvDeparturePlanner({
   const sensor = home.evBatterySensors?.find(
     (s) => s.entityId === device.evBattery?.sensorEntityId,
   );
+  // Exclude standby draw and stale telemetry from the charging animation.
+  const charging =
+    home.connected &&
+    !home.revoked &&
+    !stale &&
+    device.state === "on" &&
+    (device.powerWatts ?? 0) > 50 &&
+    sensor?.percent != null &&
+    sensor.percent < (chargeLimitControl?.percent ?? 100);
   const inputs = {
     departure,
     targetPercent,
@@ -311,12 +320,12 @@ export function EvDeparturePlanner({
           </span>
           <input
             type="range"
-            className="smart-slider"
+            className="ev-limit-slider"
             aria-label="Charge limit (%)"
             aria-valuetext={`${targetPercent}%`}
             style={
               {
-                "--smart-slider-fill": `${Math.max(
+                "--ev-limit-fill": `${Math.max(
                   0,
                   Math.min(
                     100,
@@ -344,7 +353,53 @@ export function EvDeparturePlanner({
         </label>
         <div className="ev-charge-stats">
           <div className="ev-battery-reading">
-            <BatteryCharging size={28} aria-hidden="true" />
+            <svg
+              className={`ev-battery-icon${charging ? " is-charging" : ""}`}
+              viewBox="0 0 32 22"
+              width="40"
+              height="28"
+              role="img"
+              aria-label={charging ? "Charging" : "Battery level"}
+              style={
+                {
+                  "--ev-battery-level":
+                    sensor?.percent != null && home.connected && !stale
+                      ? Math.max(0, Math.min(1, sensor.percent / 100))
+                      : 0,
+                } as CSSProperties
+              }
+            >
+              <rect
+                x="1"
+                y="3"
+                width="26"
+                height="16"
+                rx="3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              />
+              <rect
+                x="29"
+                y="8"
+                width="2"
+                height="6"
+                rx="1"
+                fill="currentColor"
+              />
+              <rect
+                className="ev-battery-fill"
+                x="4"
+                y="6"
+                width="20"
+                height="10"
+                rx="1"
+                fill="currentColor"
+              />
+              {charging && (
+                <path d="m15 5-5 7h5l-2 5 7-8h-5l2-4" fill="currentColor" />
+              )}
+            </svg>
             <div>
               <strong>
                 {sensor?.percent == null || !home.connected || stale

@@ -52,6 +52,60 @@
   font-size: 24px;
   font-variant-numeric: tabular-nums;
 }
+.ev-inputs .field .ev-limit-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.ev-limit-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--grounded) var(--ev-limit-fill),
+    var(--border) var(--ev-limit-fill)
+  );
+}
+.ev-limit-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--grounded) var(--ev-limit-fill),
+    var(--border) var(--ev-limit-fill)
+  );
+}
+.ev-limit-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--grounded);
+}
+.ev-limit-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--grounded);
+}
+.ev-limit-slider:focus-visible {
+  outline: 2px solid var(--grounded);
+  outline-offset: 4px;
+}
+.ev-limit-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .ev-inputs small,
 .ev-help,
 .ev-footnote {
@@ -70,6 +124,39 @@
   display: block;
   font-size: 28px;
   color: var(--grounded);
+}
+.ev-battery-icon {
+  flex: 0 0 auto;
+  color: var(--grounded);
+}
+.ev-battery-fill {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: scaleX(var(--ev-battery-level, 0));
+  opacity: 0.3;
+}
+.ev-battery-icon.is-charging .ev-battery-fill {
+  animation: ev-battery-fill 5s ease-in-out infinite;
+}
+@keyframes ev-battery-fill {
+  0% {
+    transform: scaleX(0.05);
+    opacity: 0.3;
+  }
+  80%,
+  90% {
+    transform: scaleX(1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ev-battery-icon.is-charging .ev-battery-fill {
+    animation: none;
+  }
 }
 .ev-battery-reading div > span {
   display: block;
