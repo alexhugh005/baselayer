@@ -1,0 +1,83 @@
+name: baselayer-dev
+
+# Run alongside an existing Home Assistant / PanelBench lab on the host.
+services:
+  frontend:
+    image: node:24-alpine
+    init: true
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c 'npm ci && npm run dev -- --host 0.0.0.0'
+    environment:
+      VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-pk_test_Ym9sZC1ib3hlci04MTI1LmNsZXJrLmFjY291bnRzLmRldiQ}
+      API_PROXY_TARGET: http://api:8080
+      DEV_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend-modules:/app/node_modules
+    ports:
+      - "127.0.0.1:${APP_PORT:-5173}:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:5173/health]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  api:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    init: true
+    restart: unless-stopped
+    working_dir: /workspace/src/BaseLayer.Api
+    command: dotnet watch --non-interactive run --no-launch-profile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      AllowedHosts: localhost;127.0.0.1;api
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+      DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "true"
+      DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER: "true"
+      DOTNET_WATCH_SUPPRESS_BROWSER_REFRESH: "true"
+      Clerk__Issuer: ${CLERK_ISSUER:-https://bold-boxer-8125.clerk.accounts.dev}
+      Clerk__AuthorizedParties__0: http://localhost:${APP_PORT:-5173}
+      HomeAssistant__AllowedOrigins__0: http://localhost:${LAB_HA_PORT:-8123}
+      HomeAssistant__AllowedOrigins__1: http://localhost:${LAB_HA_PORT:-8123}
+      HomeAssistant__ClientId: http://localhost:${APP_PORT:-5173}/
+      HomeAssistant__RedirectUri: http://localhost:${APP_PORT:-5173}/oauth/home-assistant
+      HomeAssistant__Transport__PublicOrigin: http://localhost:${LAB_HA_PORT:-8123}
+      HomeAssistant__Transport__InternalOrigin: http://host.docker.internal:${LAB_HA_PORT:-8123}
+      Battery__PanelBench__Enabled: "true"
+      Battery__PanelBench__HomeAssistantOrigin: http://localhost:${LAB_HA_PORT:-8123}
+      Battery__PanelBench__HealthUrl: http://host.docker.internal:${LAB_HEALTH_PORT:-18081}/health
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Includes the existing SQLite database and its token-encryption keys.
+      - ./backend:/workspace
+      - nuget-packages:/root/.nuget/packages
+    # Keep Linux build output separate from host builds.
+    tmpfs:
+      - /workspace/src/BaseLayer.Api/bin:exec
+      - /workspace/src/BaseLayer.Api/obj:exec
+      - /workspace/src/BaseLayer.Application/bin:exec
+      - /workspace/src/BaseLayer.Application/obj:exec
+      - /workspace/src/BaseLayer.Data/bin:exec
+      - /workspace/src/BaseLayer.Data/obj:exec
+      - /workspace/src/BaseLayer.Domain/bin:exec
+      - /workspace/src/BaseLayer.Domain/obj:exec
+    ports:
+      - "127.0.0.1:${API_PORT:-5080}:8080"
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://localhost:8080/health]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+
+volumes:
+  frontend-modules:
+  nuget-packages:

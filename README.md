@@ -96,6 +96,39 @@ Run the startup command again to resume. Named volumes preserve the installation
 adding `--volumes` to `down` would erase it. A shareable standalone ZIP is available
 at [artifacts/energy-lab/energy-lab-compose.zip](artifacts/energy-lab/energy-lab-compose.zip).
 
+## Develop Base Layer in Docker with automatic reload
+
+With Home Assistant and PanelBench already running (the standalone lab above or
+your existing local lab), stop any host frontend/API processes, then run:
+
+```sh
+docker compose -f compose.dev.yaml up -d --wait --wait-timeout 600
+```
+
+Open **http://localhost:5173**. This starts the frontend and API in development
+containers. Source files are mounted directly: Vite refreshes frontend edits,
+and `dotnet watch` reloads C# changes or restarts the API when necessary. Polling
+detects edits through Docker Desktop mounts. Containers run in the background
+and restart with Docker unless explicitly stopped.
+
+This mode reuses `backend/src/BaseLayer.Api/data/`, including its database and
+encryption keys, and reads the local API configuration if present. Do not run the
+host API against that database at the same time. Home Assistant and PanelBench
+stay in their existing containers; the API reaches their published ports through
+`host.docker.internal`. `LAB_HA_PORT` and `LAB_HEALTH_PORT` override those ports.
+Use `CLERK_PUBLISHABLE_KEY` and `CLERK_ISSUER` in the root `.env` for another Clerk app.
+
+```sh
+docker compose -f compose.dev.yaml ps
+docker compose -f compose.dev.yaml logs -f --tail 50 frontend api
+docker compose -f compose.dev.yaml restart frontend  # after npm dependency changes
+docker compose -f compose.dev.yaml down              # preserves saved app/lab data
+```
+
+No rebuild is needed for ordinary source edits. After changing Compose settings,
+rerun the startup command. The regular `compose.yaml` remains the compiled full-stack
+setup; use the development command above while editing code.
+
 ## Develop Base Layer without Docker
 
 Prerequisites: .NET 10 SDK, Node 24 LTS, npm, and a reachable Home Assistant instance
