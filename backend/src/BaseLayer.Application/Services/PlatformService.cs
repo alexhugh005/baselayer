@@ -49,7 +49,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
             AutoRestorePolicy.Ordered(home.Devices.Where(d => d.RestoreEntry != null))
                 .Select(d => new RestoreQueueDto(d.EntityId, d.Name, AutoRestorePolicy.Estimate(home, d), d.RestoreEntry!.QueuedUtc,
                     d.SmartUsageHeld ? "held" : !home.SmartPowerOffEnabled ? "paused" : AutoRestorePolicy.Estimate(home, d) is null ? "unknown" : d.RestoreEntry!.Status.ToString().ToLowerInvariant(), online ? EvControl(home, d)?.Amps : null, d.RestoreEntry!.TargetCurrentAmps)).ToList(), online ? CurrentControls(home) : [], home.GridOutageRisk, PowerSupplyDetection.Current(home, Now), OutageRecoveryPolicy.Status(home, Now), home.AnomalySavingsEnabled,
-            new(home.Anomalies.Sum(a => a.EstimatedSavedKwh), home.Anomalies.Count(a => a.ConfirmedUtc != null)),
+            new(home.Anomalies.Sum(AnomalySavingsPolicy.EstimateKwh), home.Anomalies.Count(a => a.ConfirmedUtc != null)),
             home.Anomalies.OrderByDescending(a => a.ReceivedUtc).Take(30).Select(a => AnomalyDto(a, home.Commands.SingleOrDefault(c => c.Id == a.CommandId))).ToList(),
             EvBatterySensors(home).Select(s => online ? s : s with { Percent = null }).ToList(), DevicePowerStandards.Categories, EvVehicles(home));
     }

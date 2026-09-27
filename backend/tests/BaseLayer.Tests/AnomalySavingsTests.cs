@@ -38,28 +38,32 @@ public sealed partial class PlatformTests
     }
 
     [Fact]
-    public async Task AnomalySavingsCreditsOnlyConfirmedObservedOffIntervalsAndCapsAtOneHour()
+    public async Task AnomalySavingsProjectsFifteenDaysOfExcessImmediatelyAfterConfirmation()
     {
         var home = await Connect();
         await Allow(home);
         await service.AnomalySavingsAsync("alice", home.Id, new(true));
         await service.EnqueueAnomalyAsync("alice", home.Id, Anomaly());
         await service.PollAsync(home.Id);
+        Assert.Equal(0, (await service.HomesAsync("alice"))[0].AnomalySavings!.EstimatedSavedKwh);
         provider.Off = true;
         await service.PollAsync(home.Id);
-        for (var i = 0; i < 180; i++) { clock.Advance(20); await service.PollAsync(home.Id); }
-        clock.Advance(20);
-        await service.PollAsync(home.Id);
         var result = (await service.HomesAsync("alice"))[0];
-        Assert.Equal(4, result.AnomalySavings!.EstimatedSavedKwh, 8);
+        Assert.Equal(1440, result.AnomalySavings!.EstimatedSavedKwh, 8); // (5000 - 1000) W × 360 hours.
+        Assert.Equal(230.40, result.AnomalySavings.EstimatedSavedKwh * result.AnomalySavings.EstimatedRatePerKwh, 8);
+        Assert.Equal(21600, result.AnomalySavings.AssumedUndetectedMinutes);
         Assert.Equal(1, result.AnomalySavings.ConfirmedActions);
         Assert.Equal("Confirmed", Assert.Single(result.Anomalies!).Status);
+        Assert.Equal(1440, Assert.Single(result.Anomalies!).EstimatedSavedKwh, 8);
         Assert.NotNull(Assert.Single(result.Commands).AnomalyId);
         Assert.Equal(0, provider.TurnOns);
+        clock.Advance(16 * 24 * 60 * 60);
+        await service.PollAsync(home.Id);
+        Assert.Equal(1440, (await service.HomesAsync("alice"))[0].AnomalySavings!.EstimatedSavedKwh, 8);
     }
 
     [Fact]
-    public async Task AnomalySavingsExcludesGapsAndClosesWhenDeviceRestarts()
+    public async Task HistoricalSavingsAreReestimatedAndDoNotAccumulateWithElapsedTimeOrDeviceRestarts()
     {
         var home = await Connect();
         await Allow(home);
@@ -68,9 +72,15 @@ public sealed partial class PlatformTests
         await service.PollAsync(home.Id);
         provider.Off = true;
         await service.PollAsync(home.Id);
+        var ledger = await db.Set<UsageAnomaly>().SingleAsync();
+        ledger.EstimatedSavedKwh = 0.02; // Previous observed-off calculation.
+        ledger.SavingsClosed = true;
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        Assert.Equal(1440, (await service.HomesAsync("alice"))[0].AnomalySavings!.EstimatedSavedKwh, 8);
         clock.Advance(600);
         await service.PollAsync(home.Id);
-        Assert.Equal(0, (await service.HomesAsync("alice"))[0].AnomalySavings!.EstimatedSavedKwh);
+        Assert.Equal(1440, (await service.HomesAsync("alice"))[0].AnomalySavings!.EstimatedSavedKwh, 8);
         clock.Advance(18);
         await service.PollAsync(home.Id);
         provider.Off = false;
@@ -79,7 +89,7 @@ public sealed partial class PlatformTests
         provider.Off = true;
         clock.Advance(18);
         await service.PollAsync(home.Id);
-        Assert.Equal(0.02, (await service.HomesAsync("alice"))[0].AnomalySavings!.EstimatedSavedKwh, 8);
+        Assert.Equal(1440, (await service.HomesAsync("alice"))[0].AnomalySavings!.EstimatedSavedKwh, 8);
     }
 
     [Fact]

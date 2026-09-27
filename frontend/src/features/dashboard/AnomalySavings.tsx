@@ -90,6 +90,8 @@ export function AnomalySavingsWidget({ home }: { home: Home }) {
   const savings = home.anomalySavings;
   const kwh = savings?.estimatedSavedKwh ?? 0;
   const rate = savings?.estimatedRatePerKwh ?? 0.16;
+  const assumedDays =
+    (savings?.assumedUndetectedMinutes ?? 15 * 24 * 60) / (24 * 60);
   return (
     <div
       className="card metric-card savings-card"
@@ -105,6 +107,9 @@ export function AnomalySavingsWidget({ home }: { home: Home }) {
           currency: "USD",
         }).format(kwh * rate)}
       </strong>
+      <span className="muted">
+        Estimated from {assumedDays} days of excess usage per shutoff.
+      </span>
     </div>
   );
 }

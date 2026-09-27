@@ -66,7 +66,7 @@ public sealed partial class PlatformTests
         Assert.Equal(0, provider.Sends);
         clock.Advance(3600);
         await service.PollAsync(home.Id);
-        Assert.Equal(2, (await service.HomesAsync("alice"))[0].Anomalies!.Count);
+        Assert.Single((await service.HomesAsync("alice"))[0].Anomalies!);
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public sealed partial class PlatformTests
         Assert.Equal(1200, Assert.Single((await service.HomesAsync("alice"))[0].Devices).StandardWatts);
     }
     [Fact]
-    public async Task RestartedDeviceNotifiesAgainDuringShutoffCooldownWithoutSendingAgain()
+    public async Task RestartedDeviceShutsOffAgainAfterConfirmedSuccessWithoutWaitingAnHour()
     {
         var home = await Connect();
         await service.SettingsAsync("alice", home.Id, StandardSettings());
@@ -170,13 +170,89 @@ public sealed partial class PlatformTests
         await service.PollAsync(home.Id);
         var events = (await service.HomesAsync("alice"))[0].Anomalies!;
         Assert.Equal(2, events.Count);
-        Assert.Equal("NotificationOnly", events[0].Status);
-        Assert.Contains("within the last hour", events[0].Message);
-        Assert.Equal(1, provider.Sends);
+        Assert.Equal("AwaitingConfirmation", events[0].Status);
+        Assert.Equal(2, provider.Sends);
         db.ChangeTracker.Clear();
         clock.Advance(3);
         await service.PollAsync(home.Id);
         Assert.Equal(2, (await service.HomesAsync("alice"))[0].Anomalies!.Count);
+        Assert.Equal(2, provider.Sends);
+        Assert.Equal(0, provider.TurnOns);
+    }
+
+    [Theory]
+    [InlineData("Confirmed", true)]
+    [InlineData("Failed", true)]
+    [InlineData("AwaitingConfirmation", false)]
+    public async Task PersistedCooldownWarningIsRecheckedWithFreshPowerUnlessAnActionIsPending(string previousStatus, bool shouldSend)
+    {
+        var home = await Connect();
+        await service.SettingsAsync("alice", home.Id, StandardSettings());
+        await service.AnomalySavingsAsync("alice", home.Id, new(true));
+        StandardReading(1800);
+        await service.PollAsync(home.Id);
+        var saved = await db.Homes.Include(h => h.Commands).Include(h => h.Anomalies).Include(h => h.Devices).SingleAsync();
+        var previous = saved.Commands.Single();
+        previous.Status = previousStatus;
+        if (!shouldSend)
+        {
+            previous.ExpiresUtc = clock.GetUtcNow().UtcDateTime.AddHours(1);
+            previous.LeaseUntilUtc = previous.ExpiresUtc;
+        }
+        saved.Anomalies.Single().Status = previousStatus;
+        clock.Advance(3);
+        saved.Anomalies.Add(new UsageAnomaly
+        {
+            HomeId = home.Id, EntityId = "switch.dryer", EventId = "standard:previous-cooldown",
+            Status = "NotificationOnly", RecommendedAction = "Off", UsualWatts = 1200, ObservedWatts = 1800,
+            DetectedUtc = clock.GetUtcNow().UtcDateTime, ReceivedUtc = clock.GetUtcNow().UtcDateTime,
+            PowerSensorRevision = saved.Devices.Single().PowerSensorRevision,
+            Message = "A device action is already pending or was attempted within the last hour. Review before acting again."
+        });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        clock.Advance(600); // The old warning is too old to dispatch; require a new reading.
+        await service.PollAsync(home.Id);
+        Assert.Equal(shouldSend ? 2 : 1, provider.Sends);
+        var events = (await service.HomesAsync("alice"))[0].Anomalies!;
+        Assert.Equal(shouldSend ? 3 : 2, events.Count);
+        Assert.Equal(shouldSend ? "AwaitingConfirmation" : "NotificationOnly", events[0].Status);
+        db.ChangeTracker.Clear();
+        clock.Advance(3);
+        await service.PollAsync(home.Id);
+        Assert.Equal(shouldSend ? 2 : 1, provider.Sends);
+    }
+
+    [Fact]
+    public async Task FailedEpisodeHasBoundedRetriesButNewEpisodeCanActImmediately()
+    {
+        var home = await Connect();
+        await service.SettingsAsync("alice", home.Id, StandardSettings());
+        await service.AnomalySavingsAsync("alice", home.Id, new(true));
+        StandardReading(1800);
+        provider.Fail = true;
+        await service.PollAsync(home.Id);
+        foreach (var delay in new[] { 5, 10, 20, 40 })
+        {
+            clock.Advance(delay);
+            await service.PollAsync(home.Id);
+        }
+        Assert.Equal(4, provider.Sends);
+        Assert.Equal("Failed", Assert.Single((await service.HomesAsync("alice"))[0].Anomalies!).Status);
+        db.ChangeTracker.Clear();
+        clock.Advance(3);
+        await service.PollAsync(home.Id);
+        Assert.Equal(4, provider.Sends);
+
+        StandardReading(1200);
+        clock.Advance(3);
+        await service.PollAsync(home.Id);
+        StandardReading(1800);
+        provider.Fail = false;
+        clock.Advance(3);
+        await service.PollAsync(home.Id);
+        Assert.Equal(5, provider.Sends);
+        Assert.Equal("AwaitingConfirmation", (await service.HomesAsync("alice"))[0].Anomalies![0].Status);
     }
 
     [Fact]

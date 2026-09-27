@@ -36,10 +36,10 @@ const home = {
   anomalies: [anomaly],
   anomalySavingsEnabled: false,
   anomalySavings: {
-    estimatedSavedKwh: 4,
+    estimatedSavedKwh: 540,
     confirmedActions: 1,
     estimatedRatePerKwh: 0.16,
-    assumedUndetectedMinutes: 60,
+    assumedUndetectedMinutes: 21600,
   },
 } as unknown as Home;
 afterEach(() => {
@@ -75,10 +75,13 @@ it("persists the setting and retains the old value if saving fails", async () =>
   );
 });
 
-it("shows only the lifetime dollar savings total", () => {
+it("shows estimated lifetime dollar savings with the fifteen-day excess-usage assumption", () => {
   render(<AnomalySavingsWidget home={home} />);
-  expect(screen.getByText("$0.64")).toBeTruthy();
+  expect(screen.getByText("$86.40")).toBeTruthy();
   expect(screen.getByText("LIFETIME SAVINGS")).toBeTruthy();
+  expect(
+    screen.getByText("Estimated from 15 days of excess usage per shutoff."),
+  ).toBeTruthy();
   expect(
     screen.queryByText(/kWh|confirmed automatic|Detection|How we estimate/),
   ).toBeNull();

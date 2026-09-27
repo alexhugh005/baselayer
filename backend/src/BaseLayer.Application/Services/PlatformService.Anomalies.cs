@@ -6,9 +6,16 @@ namespace BaseLayer.Application.Services;
 
 public sealed partial class PlatformService
 {
+    // Recognize persisted warnings from versions that imposed an hourly action cooldown.
+    private const string LegacyAnomalyCooldownMessage = "A device action is already pending or was attempted within the last hour. Review before acting again.";
+    private const string AnomalyPendingMessage = "A device action is already pending. Waiting for it to finish before checking excess usage again.";
+
+    private static bool AnomalyActionBlocked(Home home, string entityId) => home.Commands.Any(c =>
+        c.EntityId == entityId && !CommandPolicy.Terminal(c));
+
     private static AnomalyDto AnomalyDto(UsageAnomaly a, DeviceCommand? command = null) => new(a.Id, a.EventId, a.EntityId, a.UsualWatts,
         a.ObservedWatts, a.ObservedWatts - a.UsualWatts, a.RecommendedAction, DateTime.SpecifyKind(a.DetectedUtc, DateTimeKind.Utc),
-        command?.Status ?? a.Status, command?.Message ?? a.Message, a.CommandId, a.EstimatedSavedKwh);
+        command?.Status ?? a.Status, command?.Message ?? a.Message, a.CommandId, AnomalySavingsPolicy.EstimateKwh(a));
 
     public Task<HomeDto> AnomalySavingsAsync(string owner, Guid id, AnomalySavingsRequest request) =>
         operations.RunAsync(id, () => repository.TransactionAsync(async () =>
@@ -77,11 +84,17 @@ public sealed partial class PlatformService
                 device.StandardPowerAnomalyActive = false;
                 continue;
             }
-            // A new threshold crossing always notifies, even during the action cooldown.
-            // Sustained excess gets at most one reminder per hour; missing telemetry does
-            // not reset the episode. Persist this state so restart cannot replay alerts.
-            var recent = home.Anomalies.Any(a => a.EntityId == device.EntityId && a.ReceivedUtc > Now.AddHours(-1));
-            if (device.StandardPowerAnomalyActive && recent) continue;
+            // One event per continuous excess-usage episode. Normal readings rearm
+            // detection immediately; missing telemetry and restarts do not replay it.
+            var latest = home.Anomalies.Where(a => a.EntityId == device.EntityId).OrderByDescending(a => a.ReceivedUtc).FirstOrDefault();
+            // Recheck a blocked standard event when its action guard clears, using a new
+            // fresh observation. This also recovers warnings blocked by the former
+            // cooldown on successful shutoffs; it never replays a stale queued event.
+            var resumed = latest is { Status: "NotificationOnly", Message: LegacyAnomalyCooldownMessage or AnomalyPendingMessage } &&
+                latest.EventId.StartsWith("standard:", StringComparison.Ordinal) &&
+                latest.PowerSensorRevision == device.PowerSensorRevision && device.State == "on" &&
+                AnomalyDeviceAllowed(home, device) && !AnomalyActionBlocked(home, device.EntityId);
+            if (device.StandardPowerAnomalyActive && latest != null && !resumed) continue;
             device.StandardPowerAnomalyActive = true;
             if (home.Anomalies.Any(a => a.EntityId == device.EntityId && a.Status == "Queued")) continue;
             home.Anomalies.Add(new UsageAnomaly
@@ -125,7 +138,7 @@ public sealed partial class PlatformService
         foreach (var a in home.Anomalies.OrderBy(a => a.ReceivedUtc).ThenBy(a => a.Id))
         {
             var device = home.Devices.SingleOrDefault(d => d.EntityId == a.EntityId && d.Present);
-            AccrueAnomalySavings(a, device);
+            a.EstimatedSavedKwh = AnomalySavingsPolicy.EstimateKwh(a);
             if (a.Status == "Queued")
             {
                 a.Status = "NotificationOnly";
@@ -139,9 +152,8 @@ public sealed partial class PlatformService
                     if (device.State != "on" || device.PowerSensorRevision != a.PowerSensorRevision ||
                         device.PowerWatts is not { } power || !DevicePowerStandards.Exceeds(power, a.UsualWatts))
                         a.Message = "Current readings no longer confirm excess usage. Review the recommendation.";
-                    else if (home.Commands.Any(c => c.EntityId == a.EntityId && !CommandPolicy.Terminal(c)) ||
-                        home.Anomalies.Any(other => other.Id != a.Id && other.EntityId == a.EntityId && other.CommandId != null && other.ReceivedUtc > Now.AddHours(-1)))
-                        a.Message = "A device action is already pending or was attempted within the last hour. Review before acting again.";
+                    else if (AnomalyActionBlocked(home, a.EntityId))
+                        a.Message = AnomalyPendingMessage;
                     else
                     {
                         var command = new DeviceCommand
@@ -173,7 +185,7 @@ public sealed partial class PlatformService
                     action.Status = "Confirmed";
                     action.Message = "Anomaly detection turned this device off. Review it before switching it back on.";
                     a.ConfirmedUtc = Now;
-                    a.LastSavingsObservationUtc = Now;
+                    a.EstimatedSavedKwh = AnomalySavingsPolicy.EstimateKwh(a);
                 }
                 else if (device.State != "on" || device.PowerWatts is not { } current || !DevicePowerStandards.Exceeds(current, a.UsualWatts))
                 {
@@ -209,22 +221,4 @@ public sealed partial class PlatformService
         await repository.SaveAsync();
     }
 
-    private void AccrueAnomalySavings(UsageAnomaly a, Device? device)
-    {
-        if (a.ConfirmedUtc is not { } start || a.SavingsClosed) return;
-        var end = start.AddHours(1);
-        if (device?.State == "on" || device?.PowerSensorRevision != a.PowerSensorRevision)
-        {
-            a.SavingsClosed = true;
-            return;
-        }
-        // Never fill telemetry outages. Both ends must be off and at most 20 seconds apart.
-        if (device is { State: "off" } && a.LastSavingsObservationUtc is { } previous && Now - previous <= TimeSpan.FromSeconds(20))
-        {
-            var seconds = Math.Max(0, (Now < end ? Now : end).Subtract(previous).TotalSeconds);
-            a.EstimatedSavedKwh += a.AvoidedWatts / 1000 * seconds / 3600;
-        }
-        a.LastSavingsObservationUtc = device is { State: "off" } ? Now : null;
-        if (Now >= end) a.SavingsClosed = true;
-    }
 }
