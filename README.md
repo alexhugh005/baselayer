@@ -2,7 +2,71 @@
 
 A React + .NET platform for monitoring home energy and approving device shutoffs.
 Clerk handles user sign-in. Home Assistant connects through its native OAuth and
-REST APIs—no custom plugin is required.
+REST APIs—no custom plugin is required. An XGBoost model rates Austin's daily
+grid-outage risk (`low` / `medium` / `high`) from public ERCOT data and is served
+by a FastAPI container.
+
+## Quick start
+
+Needs Git and Docker with Compose v2.24+.
+
+```sh
+git clone https://github.com/sftwre/baselayer.git && cd baselayer
+docker compose up --build -d --wait --wait-timeout 600   # app, API, model API, Home Assistant, PanelBench
+```
+
+| Open | What |
+| --- | --- |
+| http://localhost:5173 | Base Layer (sign in through Clerk) |
+| http://localhost:8123 | Home Assistant lab (create an account once) |
+| http://localhost:8000/docs | Outage risk model API (interactive docs) |
+
+Try the model without any API keys:
+
+```sh
+curl -s localhost:8000/health
+curl -s localhost:8000/v1/demo/case-1   # low, low, medium, medium, low
+curl -s localhost:8000/v1/demo/case-2   # low, low, low, medium, high, low
+```
+
+Live scoring (`/v1/outage-risk`) needs ERCOT credentials; see
+[Reproduce the demo](#reproduce-the-demo). Tests are listed under
+[Verification](#verification).
+
+## Tech stack and architecture
+
+| Layer | Stack |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite, served by nginx |
+| API | ASP.NET Core (.NET 10), EF Core with SQLite, Clerk JWT auth |
+| Home integration | Home Assistant OAuth and REST; PanelBench SPAN panel simulator |
+| Data and model | Python 3.12, pandas, pyarrow, scikit-learn, XGBoost 3.4 |
+| Model serving | FastAPI and uvicorn |
+| Runtime | Docker Compose |
+
+```mermaid
+flowchart LR
+  browser[Browser] -->|sign in| clerk[Clerk]
+  browser --> fe["frontend<br/>React + nginx :5173"]
+  fe -->|/api| api["api<br/>ASP.NET Core + SQLite"]
+  api -->|OAuth + REST| ha["Home Assistant :8123<br/>virtual household"]
+  ha --> pb["PanelBench<br/>SPAN panel simulator"]
+  api --> risk["GridOutageDetectionService<br/>stub: always low"]
+  risk -. next step .-> model["model<br/>FastAPI + XGBoost :8000"]
+  model -->|archive pulls| ercot[(ERCOT Public API)]
+
+  subgraph offline [Offline Python jobs]
+    pull["baselayer_data<br/>pull + build features"] --> train["baselayer_model<br/>train + evaluate"]
+  end
+  ercot --> pull
+  train -->|model.json + thresholds| model
+```
+
+The API polls each connected home, reads the grid risk, and shuts off or
+restores devices per the user's permissions. The model service builds the same
+69 features training used, from live ERCOT data, and scores each hour and the
+day. The API does not call the model yet; see
+[Known limitations and next steps](#known-limitations-and-next-steps).
 
 ## Start everything with Docker
 
@@ -13,7 +77,8 @@ start Docker. Clone this repository and run one command from its root:
 docker compose up --build -d --wait --wait-timeout 600
 ```
 
-This builds and starts **Base Layer, its .NET API, Home Assistant, and PanelBench**.
+This builds and starts **Base Layer, its .NET API, the outage risk model API,
+Home Assistant, and PanelBench**.
 No local Node, .NET, Python, database installation, or configuration file is needed.
 The first build downloads dependencies and may take several minutes.
 
@@ -35,7 +100,7 @@ persist in named volumes. The app is available only on this machine; HA is avail
 on the LAN by default, as in the standalone lab.
 
 ```sh
-docker compose ps                         # all four services should be healthy
+docker compose ps                         # all five services should be healthy
 docker compose logs --tail 80             # diagnose startup problems
 docker compose down                       # stop, preserving accounts and data
 ```
@@ -52,12 +117,87 @@ The full stack uses its own `baselayer` Compose project and fresh volumes; it do
 not import accounts or connected homes from an existing local installation.
 
 This setup is for local use with Clerk authentication enabled. The API runs in
-Development to permit the explicitly allowlisted local HTTP lab. The separate
-Python data collection/model-training tools are offline jobs, not services required
-by the app; their setup remains in `baselayer_data/` and `baselayer_model/`.
+Development to permit the explicitly allowlisted local HTTP lab. The model API
+(`model` service, [baselayer_model/api](baselayer_model/api/README.md)) is
+published on `127.0.0.1:${MODEL_PORT:-8000}`. Data collection and model training
+are offline Python jobs in `baselayer_data/` and `baselayer_model/`.
 
 Compose waits for dependency health checks before starting the API and frontend;
 see Docker's [startup-order documentation](https://docs.docker.com/compose/how-tos/startup-order/).
+
+## Reproduce the demo
+
+### Keys and environment
+
+| What | Needed for | Where |
+| --- | --- | --- |
+| Clerk | App sign-in | Nothing to set: `compose.yaml` defaults to the project's public Clerk development app. For your own app, set `CLERK_PUBLISHABLE_KEY` and `CLERK_ISSUER` (public values; no secret key). |
+| ERCOT Public API | Live model scoring (`/v1/outage-risk`) and data pulls | Free: register at [ERCOT API Explorer](https://apiexplorer.ercot.com/), subscribe to **Public API**, copy its primary key. ERCOT serves the API to US addresses only and allows 30 requests per minute. |
+| None | Model demo routes (`/v1/demo/case-1`, `case-2`) | Work offline with the bundled model |
+
+Root `.env` (optional; copy [`.env.example`](.env.example)). Every value shown is
+the default:
+
+```sh
+APP_PORT=5173            # Base Layer
+LAB_HA_PORT=8123         # Home Assistant
+LAB_PANEL_PORT=18080     # PanelBench
+LAB_HEALTH_PORT=18081
+MODEL_PORT=8000          # outage risk model API
+LAB_BIND_ADDRESS=0.0.0.0
+# CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_ME
+# CLERK_ISSUER=https://YOUR-INSTANCE.clerk.accounts.dev
+```
+
+`baselayer_data/ercot/.env` (gitignored; copy
+[`baselayer_data/ercot/.env.example`](baselayer_data/ercot/.env.example)).
+Compose passes it to the `model` container:
+
+```sh
+ERCOT_USERNAME=you@example.com
+ERCOT_PASSWORD=your-api-explorer-password
+ERCOT_PUBLIC_API_SUBSCRIPTION_KEY=your-public-api-primary-key
+```
+
+The model container also reads `MODEL_DIR` (default `/app/model`), `DATA_ROOT`
+(`/data`, the `model-data` volume) and `REFRESH_SECONDS` (`900`; `0` turns off the
+background refresh of today's result).
+
+### Steps
+
+```sh
+cp .env.example .env                                            # optional overrides
+cp baselayer_data/ercot/.env.example baselayer_data/ercot/.env  # then fill in ERCOT credentials
+docker compose up --build -d --wait --wait-timeout 600
+
+# Model: fixed demo sequences, then today's live risk (first live call takes 30-60 s)
+curl -s localhost:8000/v1/demo/case-1
+curl -s localhost:8000/v1/demo/case-2
+curl -s localhost:8000/v1/outage-risk
+curl -s 'localhost:8000/v1/outage-risk?day=YYYY-MM-DD'           # tomorrow's date, after ERCOT posts its forecast (~09:30 CT)
+
+# Check the running container returns the expected result for every demo hour
+# (macOS: brew install libomp first)
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+DEMO_API_URL=http://127.0.0.1:8000 .venv/bin/python -m unittest baselayer_model.api.demo.test_demo
+```
+
+If you add the ERCOT credentials after startup, run `docker compose up -d model`
+to recreate the container with them.
+
+For the app demo, open http://localhost:5173, choose **Connect a home**, enter
+`http://localhost:8123`, and follow [Connect and use a home](#connect-and-use-a-home).
+The app's grid risk still comes from the `low` stub, not the model.
+
+To run the model without Docker (macOS needs `brew install libomp` for XGBoost):
+
+```sh
+.venv/bin/uvicorn baselayer_model.api.app:app --port 8000
+```
+
+The demo routes, their output fields and the cases' source hours are described in
+[baselayer_model/api/demo/README.md](baselayer_model/api/demo/README.md). The
+model API is described in [baselayer_model/api/README.md](baselayer_model/api/README.md).
 
 ## Start only Home Assistant
 
@@ -309,6 +449,7 @@ backend/src/
 backend/tests/           Domain/service/provider regression tests
 baselayer_data/         Data engineering: ERCOT pulls, datasets (.parq), ercot/ API client
 baselayer_model/        Modeling: Austin outage risk classifier (XGBoost) train/evaluate
+baselayer_model/api/    FastAPI model service, Dockerfile, demo routes and fixtures
 ```
 
 This follows the Done With School controller → service → repository style, with
@@ -322,7 +463,14 @@ dotnet test backend/BaseLayer.slnx
 npm --prefix frontend test
 npm --prefix frontend run build
 npm --prefix frontend run format:check
+
+# Python: data, model and model API (macOS: brew install libomp)
+.venv/bin/python -m unittest baselayer_data.austin_outage.test_labels baselayer_data.test_storage \
+  baselayer_model.austin_outage.test_modeling baselayer_model.api.test_api baselayer_model.api.demo.test_demo
 ```
+
+The model API's golden and feature-parity tests need the local dataset
+(`dataset/austin-outage/`) and skip without it.
 
 See [verification results](docs/verification.md) for the local end-to-end run.
 
@@ -350,3 +498,52 @@ of this setup.
 Data engineering lives in [`baselayer_data/`](baselayer_data/), including ERCOT Public Data API and live dashboard access in [`baselayer_data/ercot/`](baselayer_data/ercot/). Run `python3 baselayer_data/ercot/predict_outage.py` for the grid outage prediction. The XGBoost outage risk classifier trained on those datasets lives in [`baselayer_model/`](baselayer_model/).
 
 Automatic EV reductions also save the original current limit in the restore queue. After 5 seconds of stable spare capacity, the queue raises the amps as far as the available capacity permits, with a 500 W buffer and fresh confirmation before each further increase. Partial restores keep their queue priority until the original limit is reached. Manual current changes cancel that compensation target. See [EV charging](docs/ev-charging.md).
+
+## Datasets and provenance
+
+| Data | Real or synthetic | Source |
+| --- | --- | --- |
+| Grid features: hourly actual load, day-ahead load forecast, offline generation capacity, real-time price at Austin's load zone (`LZ_AEN`), system lambda | Real, public | ERCOT Public Data API archives: NP6-345-CD, NP3-565-CD, NP3-233-CD, NP6-322-CD, NP6-905-CD, plus the yearly NP6-785-ER price workbooks from ercot.com. Pulled by [`baselayer_data/austin_outage`](baselayer_data/austin_outage/README.md). |
+| Outage labels: 363 days from 2020-01-06 to 2026-09-05 | Hand-labeled from public records | **High**: onset days of 25,000+ Austin Energy customers out, or ERCOT-ordered load shed: Winter Storm Uri (2021), the Mara ice storm (2023), the May 2025 microburst. **Medium**: ERCOT emergencies (EEA2), conservation appeals, and days just before or during an event. **Low**: 263 seeded random days (hot and cold months weighted double) plus quiet days within ±14 days of each event. See [`labels.py`](baselayer_data/austin_outage/labels.py). |
+| Model training set | Real | `hourly.parq`, 295 days / 7,079 hourly rows (91.5% low, 6.4% medium, 2.0% high). The held-out test set is 68 days, including the whole 2025 microburst. |
+| Model demo cases | Real hours, stitched | [`demo_cases.json`](baselayer_model/api/demo/demo_cases.json) combines real hours from different days of `hourly.parq` into the requested sequences; each hour records its source day and split. Case 1 uses held-out test hours; case 2 uses Winter Storm Uri training hours. |
+| Home energy | Synthetic | The Home Assistant lab's virtual household and the PanelBench SPAN panel simulator ([portable lab](docs/home-assistant/portable/README.md)) generate device power readings. |
+| Battery telemetry | Synthetic | A configurable, time-based simulation ([battery API](docs/battery-api.md)) while the external Core API is unavailable. |
+| Retrieval outage forecast (`ercot/predict_outage.py`) | Real, public | ERCOT prices, Open-Meteo hourly weather and NOAA storm reports. |
+
+Datasets are written to `$DATA_ROOT/dataset/` (gitignored) and are not committed.
+Only the served model's files (`baselayer_model/api/model/`) and the demo fixtures
+are in the repository.
+
+## Known limitations and next steps
+
+Limitations:
+
+- **The app doesn't use the model yet.** `GridOutageDetectionService` still returns
+  `low` for every home, so Smart Shutoff never escalates on its own.
+- **Few outage examples.** The model has 8 high days from 3 events, and only Winter
+  Storm Uri was a grid supply shortage. The Mara ice storm and the 2025 microburst
+  were local line damage that ERCOT data doesn't show. On the held-out test set it
+  caught 0 of 2 high days (both microburst) and 2 of 6 medium days (precision 50%,
+  recall 33%); low days scored 91% precision and 97% recall.
+- **Hourly risk is nearly flat within a day.** Labels are per day and the strongest
+  inputs are the previous days' conditions, so the 24 hours of a day score almost
+  alike. The thresholds were tuned on daily averages.
+- **System lambda is missing from training after July 2024**, when ERCOT renamed
+  the column, but present at serving time. Lambda is the model's second most
+  important feature.
+- **Timing.** Tomorrow can be scored once ERCOT posts the day-ahead forecast
+  (~09:30 CT), but stays `degraded` until the previous day's actual load posts
+  (~06:00 CT on the day).
+- The app is a single-instance local MVP; see [Scope and deployment](#scope-and-deployment).
+
+Next steps:
+
+1. Replace the stub with an HTTP client for the model API that caches the risk
+   (the API asks every 3 seconds per home) and falls back to `low`.
+2. Re-pull system lambda for 2024–2026, rebuild the dataset and retrain.
+3. Add weather features (wind gusts, freezing rain, ice near Austin) so local-damage
+   events become visible.
+4. Serve the `nowcast` feature set (same-day actuals) for risk that changes hour
+   by hour, or label outages by hour.
+5. Collect more outage events, and recalibrate the model's compressed probabilities.
