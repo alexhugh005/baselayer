@@ -71,6 +71,9 @@ export function DeviceSettings({
         config.wattsPerAmp > 1000),
   );
   const [smartEnabled, setSmartEnabled] = useState(!!home.smartPowerOffEnabled);
+  const [alwaysBelowLimit, setAlwaysBelowLimit] = useState(
+    !!home.alwaysKeepBelowBatteryLimit,
+  );
   const [showSmartInfo, setShowSmartInfo] = useState(false);
   const [thermostatLimits, setThermostatLimits] = useState(() =>
     Object.fromEntries(
@@ -143,6 +146,7 @@ export function DeviceSettings({
           ]),
         ),
         smartPowerOffEnabled: smartEnabled,
+        alwaysKeepBelowBatteryLimit: alwaysBelowLimit,
         shutoffLevels: levels,
         allowAll: false,
         allowFutureDevices: future,
@@ -241,20 +245,21 @@ export function DeviceSettings({
         {showSmartInfo && (
           <p className="muted" id="smart-shutoff-help">
             Smart Shutoff acts at medium or high grid outage risk to keep usage
-            below 11 kW. Low risk allows usage above 11 kW. Never devices are
-            left alone. When Anomaly savings detection is on, Sometimes and
-            Anytime devices can also turn off for excess usage. Sometimes
-            devices need your approval at medium risk and can turn off
-            automatically at high risk. Anytime devices can turn off
-            automatically at either elevated level. Paired Anytime EV chargers
-            reduce their current first when they can keep charging below 11 kW.
-            Devices turned off by Base Layer join a restore queue, using their
-            power draw before shutoff as an estimate. When there is enough spare
-            capacity or grid risk returns to low, they turn back on one at a
-            time. Demo timing: 15 seconds off, 5 seconds of stable headroom, and
-            5 seconds between restorations. Reduced EVs gradually return to
-            their original current limit as capacity opens up. At elevated risk
-            we leave at least 0.5 kW of spare capacity. Unknown usage pauses
+            below 11 kW. Low risk allows usage above 11 kW unless Always stay
+            below battery limit is on. Never devices are left alone. When
+            Anomaly savings detection is on, Sometimes and Anytime devices can
+            also turn off for excess usage. Sometimes devices need your approval
+            at medium risk and can turn off automatically at high risk. Anytime
+            devices can turn off automatically whenever the limit is active.
+            Paired Anytime EV chargers reduce their current first when they can
+            keep charging below 11 kW. Devices turned off by Base Layer join a
+            restore queue, using their power draw before shutoff as an estimate.
+            When there is enough spare capacity, or grid risk returns to low
+            with the always-on limit off, they turn back on one at a time. Demo
+            timing: 15 seconds off, 5 seconds of stable headroom, and 5 seconds
+            between restorations. Reduced EVs gradually return to their original
+            current limit as capacity opens up. While the limit is active we
+            leave at least 0.5 kW of spare capacity. Unknown usage pauses
             restoration.
           </p>
         )}
@@ -267,6 +272,28 @@ export function DeviceSettings({
           />
           Enable Smart Shutoff and automatic restore
         </label>
+        <label className="meter-toggle">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={alwaysBelowLimit}
+            onChange={(e) => {
+              setAlwaysBelowLimit(e.target.checked);
+              if (e.target.checked) setSmartEnabled(true);
+            }}
+          />
+          Always stay below battery limit
+        </label>
+        <p className="muted">
+          Keep usage below {(home.limitWatts / 1000).toFixed(0)} kW even at low
+          grid risk. Enables Smart Shutoff and respects device permissions.
+          Sometimes devices need approval except at high risk; Never devices
+          stay untouched. You may need to reduce other loads if permitted
+          devices are not enough.
+          {alwaysBelowLimit &&
+            !smartEnabled &&
+            " Paused while Smart Shutoff is off."}
+        </p>
       </section>
       <h3>Devices</h3>
       <p className="muted">

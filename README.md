@@ -165,7 +165,14 @@ public signing keys, issuer, expiry and authorized origin.
    New devices default to Never; optionally default future devices to Sometimes.
 5. In **Device settings**, enable **Smart Shutoff and automatic restore** for each home you want managed.
    The grid outage detection service currently returns **low** for every home:
-   usage above 11 kW is allowed, with no automatic reduction or usage alert.
+   by default, usage above 11 kW is allowed, with no automatic reduction or usage alert.
+   Turn on **Always stay below battery limit** in **Settings** or **Device settings**
+   to apply the 11 kW limit even at low grid risk. This enables Smart Shutoff,
+   reduces Anytime devices and EV charging, and asks for approval for Sometimes
+   devices except at high risk. Automatic restoration keeps spare capacity instead
+   of bypassing the limit at low risk. Never devices stay untouched; insufficient
+   controllable loads or unavailable readings can still require manual action.
+   The preference is saved per home, defaults off, and pauses when Smart Shutoff is off.
 6. At **medium** risk and at or above 11 kW, the server first tries to reduce an
    Anytime EV's charging current, then selects the fewest measured Anytime devices
    needed, largest loads first. After confirmation and fresh measurements, it

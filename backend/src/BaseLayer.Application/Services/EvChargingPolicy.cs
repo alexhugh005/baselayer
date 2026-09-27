@@ -21,7 +21,7 @@ public static class EvChargingPolicy
             device.RestoreEntry?.TargetCurrentAmps is not { } original || control?.Amps is not { } current ||
             !Valid(control, current) || !Valid(control, original) || current >= original) return null;
         // Leave 500 W spare and budget the full rated draw, even when the car is tapering.
-        if (home.GridOutageRisk == GridOutageRisk.Low) return original;
+        if (home.GridOutageRisk == GridOutageRisk.Low && !home.AlwaysKeepBelowBatteryLimit) return original;
         var available = limitWatts - 500 - (total - power);
         var target = control.Min + Math.Floor((available / device.EvWattsPerAmp - control.Min) / control.Step) * control.Step;
         target = Math.Min(target, original);
@@ -35,7 +35,7 @@ public static class EvChargingPolicy
 
     public static double? Reduction(Home home, Device device, CurrentControlDto? control, double limitWatts)
     {
-        if (!home.SmartPowerOffEnabled || !GridOutageRisk.RequiresReduction(home.GridOutageRisk) || !device.Allowed || !device.Present || device.State != "on" ||
+        if (!home.SmartPowerOffEnabled || !GridOutageRisk.RequiresReduction(home) || !device.Allowed || !device.Present || device.State != "on" ||
             device.ShutoffLevel != ShutoffLevels.Anytime || device.EvCurrentEntityId is null ||
             home.HouseholdWatts is not { } total || !double.IsFinite(total) || total < limitWatts ||
             device.PowerWatts is not { } power || !double.IsFinite(power) || power <= 0 || power > total ||

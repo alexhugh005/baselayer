@@ -359,64 +359,79 @@ describe("grid outage risk alerts", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("waits for reductions and names every needed Sometimes device, updating when the list changes", () => {
-    const { send } = notifications();
-    localStorage.setItem("base-layer-notifications", "true");
-    const current = home({
-      smartPowerOffEnabled: true,
-      smartPowerOffStatus: "reducing",
-      devices: [],
-    });
-    const view = render(
-      <UsageAlerts homes={[current]} stale={false} onSelect={() => {}} />,
-    );
-    expect(send).not.toHaveBeenCalled();
-    const review = {
-      ...current,
-      smartPowerOffStatus: "review" as const,
-      devices: [device("switch.dryer", "Dryer"), device("switch.oven", "Oven")],
-    };
-    view.rerender(
-      <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
-    );
-    expect(send).toHaveBeenCalledExactlyOnceWith(
-      "My home: action needed",
-      expect.objectContaining({
-        body: expect.stringContaining("Turn off Dryer, Oven."),
-      }),
-    );
-    view.rerender(
-      <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
-    );
-    expect(send).toHaveBeenCalledTimes(1);
-    view.rerender(
-      <UsageAlerts
-        homes={[
-          {
-            ...review,
-            smartPowerOffStatus: "insufficient",
-            devices: [...review.devices, device("switch.pool", "Pool")],
-          },
-        ]}
-        stale={false}
-        onSelect={() => {}}
-      />,
-    );
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(send.mock.calls[1][1].body).toContain("Turn off Dryer, Oven, Pool.");
-    expect(send.mock.calls[1][1].body).toContain("Additional appliances");
-    view.rerender(
-      <UsageAlerts
-        homes={[{ ...review, gridOutageRisk: "low" }]}
-        stale={false}
-        onSelect={() => {}}
-      />,
-    );
-    view.rerender(
-      <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
-    );
-    expect(send).toHaveBeenCalledTimes(3);
-  });
+  it.each([false, true])(
+    "waits for reductions and names needed Sometimes devices (always-on limit: %s)",
+    (alwaysKeepBelowBatteryLimit) => {
+      const { send } = notifications();
+      localStorage.setItem("base-layer-notifications", "true");
+      const current = home({
+        gridOutageRisk: alwaysKeepBelowBatteryLimit ? "low" : "medium",
+        alwaysKeepBelowBatteryLimit,
+        smartPowerOffEnabled: true,
+        smartPowerOffStatus: "reducing",
+        devices: [],
+      });
+      const view = render(
+        <UsageAlerts homes={[current]} stale={false} onSelect={() => {}} />,
+      );
+      expect(send).not.toHaveBeenCalled();
+      const review = {
+        ...current,
+        smartPowerOffStatus: "review" as const,
+        devices: [
+          device("switch.dryer", "Dryer"),
+          device("switch.oven", "Oven"),
+        ],
+      };
+      view.rerender(
+        <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
+      );
+      expect(send).toHaveBeenCalledExactlyOnceWith(
+        "My home: action needed",
+        expect.objectContaining({
+          body: expect.stringContaining("Turn off Dryer, Oven."),
+        }),
+      );
+      expect(send.mock.calls[0][1].body).toContain(
+        alwaysKeepBelowBatteryLimit
+          ? "Your always-on battery limit is active."
+          : "Grid outage risk is medium.",
+      );
+      view.rerender(
+        <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
+      );
+      expect(send).toHaveBeenCalledTimes(1);
+      view.rerender(
+        <UsageAlerts
+          homes={[
+            {
+              ...review,
+              smartPowerOffStatus: "insufficient",
+              devices: [...review.devices, device("switch.pool", "Pool")],
+            },
+          ]}
+          stale={false}
+          onSelect={() => {}}
+        />,
+      );
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[1][1].body).toContain(
+        "Turn off Dryer, Oven, Pool.",
+      );
+      expect(send.mock.calls[1][1].body).toContain("Additional appliances");
+      view.rerender(
+        <UsageAlerts
+          homes={[{ ...review, gridOutageRisk: "low" }]}
+          stale={false}
+          onSelect={() => {}}
+        />,
+      );
+      view.rerender(
+        <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
+      );
+      expect(send).toHaveBeenCalledTimes(3);
+    },
+  );
 
   it("describes EV current reductions and does not misreport current restoration as a shutoff", () => {
     const { send } = notifications();

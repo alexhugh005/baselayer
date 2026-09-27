@@ -8,6 +8,7 @@ public sealed class Home
     public bool AnomalySavingsEnabled { get; set; }
     public List<UsageAnomaly> Anomalies { get; set; } = [];
     public bool SmartPowerOffEnabled { get; set; }
+    public bool AlwaysKeepBelowBatteryLimit { get; set; }
     public string? SmartPowerOffEventId { get; set; }
     public string OwnerId { get; set; } = "";
     public string Name { get; set; } = "";

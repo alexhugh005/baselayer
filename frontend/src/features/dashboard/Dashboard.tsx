@@ -337,9 +337,12 @@ export function Dashboard({
             <p className="muted">
               Smart Shutoff is on · Grid outage risk:{" "}
               {home.gridOutageRisk ?? "low"}.
+              {home.alwaysKeepBelowBatteryLimit &&
+                " Battery limit applies at every grid risk level."}
               {home.gridOutageRisk === "high"
                 ? " Anytime and Sometimes devices can turn off automatically."
-                : home.gridOutageRisk === "medium"
+                : home.gridOutageRisk === "medium" ||
+                    home.alwaysKeepBelowBatteryLimit
                   ? " Anytime devices can reduce charging or turn off automatically."
                   : " Usage above 11 kW is allowed."}
             </p>

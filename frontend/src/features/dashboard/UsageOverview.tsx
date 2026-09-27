@@ -91,7 +91,9 @@ export function UsageOverview({ home }: { home: Home }) {
           </span>
           <strong>
             {formatPower(home.limitWatts)}{" "}
-            {!overLimit && home.gridOutageRisk === "low"
+            {!overLimit &&
+            home.gridOutageRisk === "low" &&
+            !(home.smartPowerOffEnabled && home.alwaysKeepBelowBatteryLimit)
               ? "limit inactive"
               : "limit"}
           </strong>

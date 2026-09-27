@@ -164,6 +164,7 @@ export interface Home {
   restoreQueue?: RestoreQueueEntry[];
   gridOutageRisk?: GridOutageRisk;
   smartPowerOffEnabled?: boolean;
+  alwaysKeepBelowBatteryLimit?: boolean;
   smartPowerOffStatus?:
     | "off"
     | "unknown"
@@ -231,6 +232,7 @@ export interface HomeSettings {
   evCharging?: Record<string, EvChargingSettings | null>;
   gridOutageRisk?: GridOutageRisk;
   smartPowerOffEnabled?: boolean;
+  alwaysKeepBelowBatteryLimit?: boolean;
   shutoffLevels?: Record<string, ShutoffLevel>;
   thermostatLimits?: Record<string, { minF: number; maxF: number }>;
   powerSource: "wholeHouseMeter" | "deviceSum";

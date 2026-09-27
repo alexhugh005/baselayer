@@ -13,6 +13,7 @@ import { smartPowerOffMessage } from "./smartPowerOffMessage";
 import { DeviceSettings } from "../devices/DeviceSettings";
 import { RestoreQueue } from "../devices/RestoreQueue";
 import { Dashboard } from "./Dashboard";
+import { isUsageHigh } from "./UsageAlerts";
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () {
@@ -43,6 +44,33 @@ const home = {
   projectedWatts: null,
   commands: [],
 } as unknown as Home;
+
+it("shows low-risk usage warnings only when the always-on limit is active", () => {
+  const lowRisk = {
+    ...home,
+    gridOutageRisk: "low" as const,
+    householdWatts: 12000,
+    smartPowerOffEnabled: true,
+  };
+  expect(isUsageHigh(lowRisk)).toBe(false);
+  expect(isUsageHigh({ ...lowRisk, alwaysKeepBelowBatteryLimit: true })).toBe(
+    true,
+  );
+  expect(
+    isUsageHigh({
+      ...lowRisk,
+      alwaysKeepBelowBatteryLimit: true,
+      smartPowerOffEnabled: false,
+    }),
+  ).toBe(false);
+  expect(
+    smartPowerOffMessage({
+      ...lowRisk,
+      alwaysKeepBelowBatteryLimit: true,
+      smartPowerOffStatus: "reducing",
+    }),
+  ).toContain("keep usage below the battery limit");
+});
 it("saves Smart Shutoff with device settings and explains load management from the info icon", async () => {
   const saved = { ...home, smartPowerOffEnabled: true };
   const settings = vi.fn().mockResolvedValue(saved);
@@ -185,4 +213,92 @@ it("explains approval and insufficient capacity without claiming battery recover
   expect(
     smartPowerOffMessage({ ...home, smartPowerOffStatus: "insufficient" }),
   ).toContain("Turn off additional appliances yourself");
+});
+
+it("enables the always-on battery limit and Smart Shutoff together from Settings", async () => {
+  window.history.replaceState({}, "", "/settings");
+  const saved = {
+    ...home,
+    smartPowerOffEnabled: true,
+    alwaysKeepBelowBatteryLimit: true,
+  };
+  const smartPowerOff = vi.fn().mockResolvedValue(saved);
+  render(
+    <Dashboard
+      api={
+        {
+          homes: vi.fn().mockResolvedValue([home]),
+          smartPowerOff,
+        } as unknown as Api
+      }
+    />,
+  );
+  await act(async () => {});
+  const toggle = screen.getByRole("switch", {
+    name: "Always stay below battery limit for My home",
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  await act(async () => fireEvent.click(toggle));
+  expect(smartPowerOff).toHaveBeenCalledExactlyOnceWith("one", true, true);
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(
+    screen
+      .getByRole("switch", { name: /Smart Shutoff and automatic restore for/ })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+});
+
+it("saves the always-on battery limit from Device settings", async () => {
+  const settings = vi.fn().mockResolvedValue(home);
+  render(
+    <DeviceSettings
+      home={home}
+      api={{ settings } as unknown as Api}
+      onSaved={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("switch", { name: "Always stay below battery limit" }),
+  );
+  expect(
+    (
+      screen.getByRole("switch", {
+        name: "Enable Smart Shutoff and automatic restore",
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(true);
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" })),
+  );
+  expect(settings).toHaveBeenCalledWith(
+    "one",
+    expect.objectContaining({
+      smartPowerOffEnabled: true,
+      alwaysKeepBelowBatteryLimit: true,
+    }),
+  );
+});
+
+it("keeps the battery limit switch unchanged when saving fails", async () => {
+  window.history.replaceState({}, "", "/settings");
+  render(
+    <Dashboard
+      api={
+        {
+          homes: vi.fn().mockResolvedValue([home]),
+          smartPowerOff: vi
+            .fn()
+            .mockRejectedValue(new Error("Could not save limit.")),
+        } as unknown as Api
+      }
+    />,
+  );
+  await act(async () => {});
+  const toggle = screen.getByRole("switch", {
+    name: "Always stay below battery limit for My home",
+  });
+  await act(async () => fireEvent.click(toggle));
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(screen.getByRole("alert").textContent).toBe("Could not save limit.");
 });

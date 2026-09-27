@@ -9,7 +9,9 @@ export function smartPowerOffMessage(home: Home) {
     case "reducing":
       return home.gridOutageRisk === "high"
         ? "Grid outage risk is high. Smart Shutoff is reducing EV charging and turning off Anytime and Sometimes devices as needed."
-        : "Grid outage risk is medium. Smart Shutoff is reducing EV charging or turning off Anytime devices and checking updated usage.";
+        : home.alwaysKeepBelowBatteryLimit
+          ? "Smart Shutoff is reducing EV charging or turning off Anytime devices to keep usage below the battery limit."
+          : "Grid outage risk is medium. Smart Shutoff is reducing EV charging or turning off Anytime devices and checking updated usage.";
     case "review":
       return `Turn off ${names} to get below the usage limit. Review these Sometimes devices, then approve their shutoff.`;
     case "insufficient":

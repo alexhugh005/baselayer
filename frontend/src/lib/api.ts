@@ -67,10 +67,14 @@ export function createApi(getToken: TokenProvider) {
         method: "PUT",
         body: JSON.stringify({ enabled }),
       }),
-    smartPowerOff: (homeId: string, enabled: boolean) =>
+    smartPowerOff: (
+      homeId: string,
+      enabled: boolean,
+      alwaysKeepBelowBatteryLimit?: boolean,
+    ) =>
       request<Home>(`/homes/${homeId}/smart-power-off`, {
         method: "PUT",
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify({ enabled, alwaysKeepBelowBatteryLimit }),
       }),
     keepOff: (homeId: string, entityId: string) =>
       request<Home>(

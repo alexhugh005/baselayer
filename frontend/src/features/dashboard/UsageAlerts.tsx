@@ -16,7 +16,9 @@ export function hasUsageReading(home: Home) {
 
 export function isUsageHigh(home: Home) {
   return (
-    (home.gridOutageRisk === "medium" || home.gridOutageRisk === "high") &&
+    ((home.smartPowerOffEnabled && home.alwaysKeepBelowBatteryLimit) ||
+      home.gridOutageRisk === "medium" ||
+      home.gridOutageRisk === "high") &&
     hasUsageReading(home) &&
     home.householdWatts! >= home.limitWatts
   );
@@ -166,8 +168,12 @@ export function UsageAlerts({
         break;
       }
       try {
+        const reason =
+          home.smartPowerOffEnabled && home.alwaysKeepBelowBatteryLimit
+            ? "Your always-on battery limit is active."
+            : `Grid outage risk is ${home.gridOutageRisk}.`;
         const notification = new Notification(`${home.name}: action needed`, {
-          body: `Grid outage risk is ${home.gridOutageRisk}. Usage is ${formatPower(home.householdWatts)}; keep below ${formatPower(home.limitWatts)}. ${devices.length ? `Turn off ${devices.map((d) => d.name).join(", ")}. ` : ""}${home.smartPowerOffStatus === "insufficient" || !devices.length ? "Additional appliances must be turned off to get below the limit. " : ""}Open Base Layer to review devices.`,
+          body: `${reason} Usage is ${formatPower(home.householdWatts)}; keep below ${formatPower(home.limitWatts)}. ${devices.length ? `Turn off ${devices.map((d) => d.name).join(", ")}. ` : ""}${home.smartPowerOffStatus === "insufficient" || !devices.length ? "Additional appliances must be turned off to get below the limit. " : ""}Open Base Layer to review devices.`,
           tag: `usage-${home.id}`,
         });
         notification.onclick = () => {

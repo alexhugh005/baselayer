@@ -25,7 +25,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
         var detectedEvBatteries = EvBatteryDiscovery.Resolve(home.Devices, EvBatterySensors(home), EvBattery);
         const double limitWatts = LimitWatts;
         var currentWatts = online ? home.HouseholdWatts : null;
-        var riskActive = GridOutageRisk.RequiresReduction(home.GridOutageRisk);
+        var riskActive = GridOutageRisk.RequiresReduction(home);
         var reducing = riskActive && home.SmartPowerOffEnabled && currentWatts >= limitWatts &&
             (home.Commands.Any(c => c.AnomalyId == null && c.OutageEventId == null && !CommandPolicy.Terminal(c)) || AutomaticActions(home).Count > 0);
         var candidates = home.SmartPowerOffEnabled
@@ -51,7 +51,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
                     d.SmartUsageHeld ? "held" : !home.SmartPowerOffEnabled ? "paused" : AutoRestorePolicy.Estimate(home, d) is null ? "unknown" : d.RestoreEntry!.Status.ToString().ToLowerInvariant(), online ? EvControl(home, d)?.Amps : null, d.RestoreEntry!.TargetCurrentAmps)).ToList(), online ? CurrentControls(home) : [], home.GridOutageRisk, PowerSupplyDetection.Current(home, Now), OutageRecoveryPolicy.Status(home, Now), home.AnomalySavingsEnabled,
             new(home.Anomalies.Sum(AnomalySavingsPolicy.EstimateKwh), home.Anomalies.Count(a => a.ConfirmedUtc != null)),
             home.Anomalies.OrderByDescending(a => a.ReceivedUtc).Take(30).Select(a => AnomalyDto(a, home.Commands.SingleOrDefault(c => c.Id == a.CommandId))).ToList(),
-            EvBatterySensors(home).Select(s => online ? s : s with { Percent = null }).ToList(), DevicePowerStandards.Categories, EvVehicles(home));
+            EvBatterySensors(home).Select(s => online ? s : s with { Percent = null }).ToList(), DevicePowerStandards.Categories, EvVehicles(home), home.AlwaysKeepBelowBatteryLimit);
     }
     private static CommandDto Dto(DeviceCommand c) => new(c.Id, c.EntityId, c.Status, c.Attempts, c.CreatedUtc, c.Message, c.Automatic, c.Action, c.CurrentAmps, c.CircuitPriority, c.PreviousCurrentAmps, c.IsRestoration, c.OutageEventId, c.AnomalyId, c.ChargeLimitPercent, c.StartCharge);
     public async Task<List<HomeDto>> HomesAsync(string owner) => (await repository.HomesAsync(owner)).Select(ToDto).ToList();
@@ -124,6 +124,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
             throw new ArgumentException("Choose Never, Sometimes, or Anytime for each device. Thermostats cannot be shut off automatically.");
         ValidateEvSettings(home, request);
         DevicePowerStandards.Validate(home, request.DevicePowerStandards);
+        if (request.AlwaysKeepBelowBatteryLimit is { } always) SetAlwaysKeepBelowBatteryLimit(home, always);
         if (request.SmartPowerOffEnabled is { } enabled) SetSmartPowerOff(home, enabled);
         AutoRestorePolicy.ResetEligibility(home);
         home.AllowFutureDevices = request.AllowFutureDevices;
@@ -184,10 +185,18 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
         var home = await Owned(owner, id);
         if (home.Revoked)
             throw new ArgumentException("Connection revoked.");
+        if (request.AlwaysKeepBelowBatteryLimit is { } always) SetAlwaysKeepBelowBatteryLimit(home, always);
         SetSmartPowerOff(home, request.Enabled);
         await repository.SaveAsync();
         return ToDto(home);
     }));
+    private static void SetAlwaysKeepBelowBatteryLimit(Home home, bool enabled)
+    {
+        if (home.AlwaysKeepBelowBatteryLimit == enabled) return;
+        home.AlwaysKeepBelowBatteryLimit = enabled;
+        home.SmartPowerOffEventId = null;
+        AutoRestorePolicy.ResetEligibility(home);
+    }
     private static void SetSmartPowerOff(Home home, bool enabled)
     {
         home.SmartPowerOffEnabled = enabled;
@@ -216,13 +225,13 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
         return ToDto(home);
     }));
     private static bool CanAutomaticallyReduce(Home home, Device device, string action) =>
-        GridOutageRisk.RequiresReduction(home.GridOutageRisk) &&
+        GridOutageRisk.RequiresReduction(home) &&
         (device.ShutoffLevel == ShutoffLevels.Anytime ||
             (action == "Off" && home.GridOutageRisk == GridOutageRisk.High && device.ShutoffLevel == ShutoffLevels.Sometimes));
 
     private IReadOnlyList<TurnOffRecommendation> AutomaticActions(Home home)
     {
-        if (!home.SmartPowerOffEnabled || !GridOutageRisk.RequiresReduction(home.GridOutageRisk) || home.HouseholdWatts is not { } watts || !double.IsFinite(watts))
+        if (!home.SmartPowerOffEnabled || !GridOutageRisk.RequiresReduction(home) || home.HouseholdWatts is not { } watts || !double.IsFinite(watts))
             return [];
         var eventKey = $"smart:{home.SmartPowerOffEventId}";
         var attempted = home.Commands.Where(c => c.Automatic && c.Action == "Off" && c.IdempotencyKey == eventKey).Select(c => c.EntityId).ToHashSet();
@@ -237,7 +246,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
     {
         // Only a successful poll reaches here. Wait for all outstanding shutoffs
         // before planning another batch from measured usage, never projected usage.
-        if (!home.SmartPowerOffEnabled || !GridOutageRisk.RequiresReduction(home.GridOutageRisk) || home.HouseholdWatts is not { } watts || !double.IsFinite(watts) || watts < LimitWatts
+        if (!home.SmartPowerOffEnabled || !GridOutageRisk.RequiresReduction(home) || home.HouseholdWatts is not { } watts || !double.IsFinite(watts) || watts < LimitWatts
             || home.Commands.Any(c => !CommandPolicy.Terminal(c)))
             return;
         home.SmartPowerOffEventId ??= Guid.NewGuid().ToString("N");
@@ -248,7 +257,9 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
                 HomeId = home.Id, EntityId = action.EntityId, RequestedBy = home.OwnerId,
                 IdempotencyKey = $"smart:{home.SmartPowerOffEventId}", Automatic = true,
                 CreatedUtc = Now, ExpiresUtc = Now.AddMinutes(2), NextAttemptUtc = Now,
-                Message = $"Smart Shutoff selected this device because grid outage risk is {home.GridOutageRisk}."
+                Message = home.AlwaysKeepBelowBatteryLimit
+                    ? "Smart Shutoff selected this device to keep usage below the battery limit."
+                    : $"Smart Shutoff selected this device because grid outage risk is {home.GridOutageRisk}."
             });
     }
     public Task<CommandDto> CircuitCommandAsync(string owner, Guid id, CircuitCommandRequest request) => operations.RunAsync(id, () => repository.TransactionAsync(async () =>
@@ -587,7 +598,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
             catch (HttpRequestException) { CommandPolicy.Retry(command, Now, "Home Assistant rejected or could not receive the command."); }
             catch (TaskCanceledException) { CommandPolicy.Retry(command, Now, "Home Assistant command timed out."); }
         }
-        if (home.GridOutageRisk == GridOutageRisk.Low || (home.HouseholdWatts is { } measured && double.IsFinite(measured) && measured < LimitWatts))
+        if ((home.GridOutageRisk == GridOutageRisk.Low && !home.AlwaysKeepBelowBatteryLimit) || (home.HouseholdWatts is { } measured && double.IsFinite(measured) && measured < LimitWatts))
             home.SmartPowerOffEventId = null;
         await repository.SaveAsync();
     }

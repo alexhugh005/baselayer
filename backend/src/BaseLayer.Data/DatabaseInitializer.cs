@@ -34,6 +34,8 @@ public static class DatabaseInitializer
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN PowerSupplyJson TEXT NOT NULL DEFAULT '[]'");
         if (!homeColumns.Contains("OutageRecoveryJson"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN OutageRecoveryJson TEXT NOT NULL DEFAULT '{{}}'");
+        if (!homeColumns.Contains("AlwaysKeepBelowBatteryLimit"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN AlwaysKeepBelowBatteryLimit INTEGER NOT NULL DEFAULT 0");
         if (!homeColumns.Contains("SmartPowerOffEnabled"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Homes ADD COLUMN SmartPowerOffEnabled INTEGER NOT NULL DEFAULT 0");
         if (!homeColumns.Contains("SmartPowerOffEventId"))
