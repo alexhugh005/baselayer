@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 from baselayer_model.austin_outage import modeling as m
 
@@ -33,7 +34,14 @@ def score_day(hourly, run):
     daily = m.daily_probs(df.assign(label=None), proba)
     risk = m.CLASSES[int(m.apply_thresholds(daily, run.thresholds)[0])]
     day = daily.iloc[0]
-    hours = df["hour_ending"].to_numpy() if "hour_ending" in df else np.arange(1, len(df) + 1)
+
+    # The model scores each hour; its training label was the hour's day class.
+    # Hours get the same cascade as the day (thresholds were tuned on daily means).
+    hourly = pd.DataFrame(proba, columns=["p_low", "p_medium", "p_high"])
+    hourly["p_elevated"] = hourly["p_medium"] + hourly["p_high"]
+    hourly["risk"] = [m.CLASSES[i] for i in m.apply_thresholds(hourly, run.thresholds)]
+    hourly["hour_ending"] = df["hour_ending"].to_numpy() if "hour_ending" in df else np.arange(1, len(df) + 1)
+    hourly["dst_flag"] = df["dst_flag"].astype(bool).to_numpy() if "dst_flag" in df else False
     return {
         "oper_day": str(days[0]),
         "risk": risk,
@@ -46,7 +54,15 @@ def score_day(hourly, run):
         "missing_features": missing,
         "model_version": run.version,
         "hourly": [
-            {"hour_ending": int(h), "p_low": float(p[0]), "p_medium": float(p[1]), "p_high": float(p[2])}
-            for h, p in zip(hours, proba)
+            {
+                "hour_ending": int(r.hour_ending),
+                "dst_flag": bool(r.dst_flag),
+                "risk": r.risk,
+                "p_low": float(r.p_low),
+                "p_medium": float(r.p_medium),
+                "p_high": float(r.p_high),
+                "p_elevated": float(r.p_elevated),
+            }
+            for r in hourly.itertuples()
         ],
     }

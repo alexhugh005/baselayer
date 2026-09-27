@@ -81,8 +81,22 @@ class ScoreTests(unittest.TestCase):
         self.assertAlmostEqual(out["p_low"] + out["p_medium"] + out["p_high"], 1, places=5)
         self.assertAlmostEqual(out["p_elevated"], out["p_medium"] + out["p_high"], places=6)
         self.assertEqual(len(out["hourly"]), 24)
+        self.assertEqual([h["hour_ending"] for h in out["hourly"]], list(range(1, 25)))
+        for hour in out["hourly"]:
+            self.assertIn(hour["risk"], m.CLASSES)
+            self.assertAlmostEqual(hour["p_low"] + hour["p_elevated"], 1, places=5)
         self.assertTrue(out["degraded"])
         self.assertIn("fcst_total_mw", out["missing_features"])
+
+    def test_hourly_risk_uses_the_threshold_cascade(self):
+        out = score_day(empty_day(dt.date(2026, 2, 16)), self.model_run)
+        t = out["thresholds"]
+        for hour in out["hourly"]:
+            expected = ("high" if hour["p_high"] >= t["high"]
+                        else "medium" if hour["p_elevated"] >= t["medium"] else "low")
+            self.assertEqual(hour["risk"], expected)
+        # The day is the mean of its hours.
+        self.assertAlmostEqual(out["p_high"], np.mean([h["p_high"] for h in out["hourly"]]), places=6)
 
     def test_rejects_multiple_days(self):
         rows = pd.concat([empty_day(dt.date(2026, 2, 16)), empty_day(dt.date(2026, 2, 17))])
@@ -186,6 +200,15 @@ class AppTests(unittest.TestCase):
         self.now += dt.timedelta(hours=2)
         client.get("/v1/outage-risk")
         self.assertEqual(len(self.builds), 2)
+
+    def test_recomputes_results_cached_in_an_older_shape(self):
+        path = self.root / "results" / f"{self.TODAY}.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({"model_version": load_run().version, "degraded": False,
+                                    "generated_at": self.now.isoformat(), "hourly": []}))
+        body = self.client().get("/v1/outage-risk").json()
+        self.assertEqual(len(self.builds), 1)
+        self.assertEqual(len(body["hourly"]), 24)
 
     def test_serves_stale_result_when_pull_fails(self):
         client = self.client()

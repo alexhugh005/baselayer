@@ -43,13 +43,18 @@ CENTRAL = ZoneInfo("America/Chicago")
 FINAL_AFTER = dt.time(7, 0)
 # Incomplete results are retried at most this often.
 RETRY_AFTER = dt.timedelta(hours=1)
+# Bump when the stored result shape changes, so older cached results are recomputed.
+RESULT_SCHEMA = 2
 
 
 class HourlyRisk(BaseModel):
     hour_ending: int
+    dst_flag: bool
+    risk: str
     p_low: float
     p_medium: float
     p_high: float
+    p_elevated: float
 
 
 class OutageRisk(BaseModel):
@@ -109,8 +114,15 @@ class RiskService:
                 self.results[day] = json.loads(path.read_text())
         return self.results.get(day)
 
+    def usable(self, result):
+        return (
+            result is not None
+            and result.get("schema") == RESULT_SCHEMA
+            and result["model_version"] == self.run.version
+        )
+
     def fresh(self, result, day):
-        if result is None or result["model_version"] != self.run.version:
+        if not self.usable(result):
             return False
         generated = dt.datetime.fromisoformat(result["generated_at"])
         final_from = dt.datetime.combine(day, FINAL_AFTER, CENTRAL)
@@ -128,6 +140,7 @@ class RiskService:
 
         result = score_day(rows, self.run)
         result.update(
+            schema=RESULT_SCHEMA,
             generated_at=self.clock().isoformat(),
             data_as_of=live_features.postings(raw, day),
             pull_errors=pull_errors,
@@ -151,7 +164,7 @@ class RiskService:
                 return await run_in_threadpool(self.compute, day)
             except Exception as exc:
                 log.exception("scoring %s failed", day)
-                if hit is not None and hit["model_version"] == self.run.version:
+                if self.usable(hit):
                     return {**hit, "stale": True}
                 raise HTTPException(503, f"could not score {day}: {type(exc).__name__}: {exc}") from exc
 
