@@ -68,6 +68,10 @@ defaults to today in Central time and can be at most tomorrow;
 
 `GET /health` returns the model version and the last background refresh.
 
+`GET /v1/demo/case-1` and `GET /v1/demo/case-2` score fixed sequences of real
+historical hours (low → medium → high) for demos, without calling ERCOT; see
+[demo/README.md](demo/README.md).
+
 ## When a day's result is ready
 
 A day's features are its day-ahead load forecast (posted ~09:30 the day
