@@ -38,6 +38,7 @@ const home = {
   allowFutureDevices: false,
   connected: true,
   limitWatts: 11000,
+  gridOutageRisk: "medium",
   householdWatts: null,
   projectedWatts: null,
   commands: [],
@@ -54,11 +55,11 @@ it("saves Smart Shutoff with device settings and explains load management from t
       onClose={vi.fn()}
     />,
   );
-  expect(screen.queryByText(/Smart Shutoff allows devices/)).toBeNull();
+  expect(screen.queryByText(/Smart Shutoff acts at medium or high/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "About Smart Shutoff" }));
   expect(
-    screen.getByText(/Smart Shutoff allows devices/).textContent,
-  ).toContain("battery's power limit");
+    screen.getByText(/Smart Shutoff acts at medium or high/).textContent,
+  ).toContain("Low risk allows usage above 11 kW");
   fireEvent.click(
     screen.getByRole("switch", {
       name: "Enable Smart Shutoff and automatic restore",

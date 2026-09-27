@@ -38,8 +38,8 @@ export function SmartShutoffSetting({
       <div>
         <h3>{home.name}</h3>
         <p className="muted" id={helpId}>
-          Turn off allowed devices at or above {home.limitWatts / 1000} kW and
-          restore devices when there is enough spare capacity.
+          Reduce usage during elevated grid risk, following device permissions.
+          Automatically restore devices when capacity returns or risk drops.
         </p>
         {home.revoked && (
           <p className="muted">Reconnect this home to change this setting.</p>

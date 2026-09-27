@@ -3,10 +3,38 @@ export interface PowerSensor {
   name: string;
   unit: string;
 }
+export type GridOutageRisk = "low" | "medium" | "high";
 export type ShutoffLevel = "Never" | "Sometimes" | "Anytime";
 export interface EvChargingSettings {
   currentEntityId: string;
   wattsPerAmp: number;
+}
+export interface EvBatterySettings {
+  autoDetected?: boolean;
+  sensorEntityId: string;
+  capacityKwh: number | null;
+  efficiencyPercent: number;
+}
+export interface EvVehicle {
+  id: string;
+  name: string;
+  chargerEntityId: string;
+  battery: EvBatterySettings;
+}
+export interface ChargeLimitControl {
+  entityId: string;
+  name: string;
+  percent: number | null;
+  min: number;
+  max: number;
+  step: number;
+}
+export interface EvBatterySensor {
+  chargeLimitControl?: ChargeLimitControl | null;
+  capacityKwh?: number | null;
+  entityId: string;
+  name: string;
+  percent: number | null;
 }
 export interface CurrentControl {
   entityId: string;
@@ -17,7 +45,21 @@ export interface CurrentControl {
   step: number;
 }
 export type CircuitPriority = "never" | "soc_threshold" | "off_grid";
+export interface DeviceCategory {
+  id: string;
+  name: string;
+  standardWatts: number | null;
+}
+export interface DevicePowerSettings {
+  category: string;
+  standardWatts: number | null;
+}
 export interface Device {
+  category?: string | null;
+  standardWatts?: number | null;
+  standardWattsOverride?: number | null;
+  anomalyThresholdWatts?: number | null;
+  evBattery?: EvBatterySettings | null;
   circuitPriority?: {
     entityId: string;
     priority: CircuitPriority | null;
@@ -37,7 +79,25 @@ export interface Device {
   recommended: boolean;
   powerSensorId: string | null;
 }
+export interface UsageAnomaly {
+  id: string;
+  eventId: string;
+  entityId: string;
+  usualWatts: number;
+  observedWatts: number;
+  differenceWatts: number;
+  recommendedAction: "Off" | "Inspect";
+  detectedUtc: string;
+  status: string;
+  message: string;
+  commandId: string | null;
+  estimatedSavedKwh: number;
+}
 export interface Command {
+  chargeLimitPercent?: number | null;
+  startCharge?: boolean;
+  anomalyId?: string | null;
+  outageEventId?: string | null;
   action?: "On" | "Off" | "SetCurrent" | "SetCircuitPriority";
   circuitPriority?: CircuitPriority | null;
   currentAmps?: number | null;
@@ -61,8 +121,47 @@ export interface RestoreQueueEntry {
   status: "waiting" | "restoring" | "failed" | "paused" | "unknown" | "held";
 }
 export interface Home {
+  deviceCategories?: DeviceCategory[];
+  evBatterySensors?: EvBatterySensor[];
+  evVehicles?: EvVehicle[];
+  anomalySavingsEnabled?: boolean;
+  anomalySavings?: {
+    estimatedSavedKwh: number;
+    confirmedActions: number;
+    estimatedRatePerKwh: number;
+    assumedUndetectedMinutes: number;
+  };
+  anomalies?: UsageAnomaly[];
+  outageRecovery?: {
+    status: string;
+    eventId: string | null;
+    startedUtc: string | null;
+    nextRestoreAtUtc: string | null;
+    budgetWatts: number;
+    measuredWatts: number | null;
+    reservedWatts: number | null;
+    circuits: {
+      entityId: string;
+      name: string;
+      estimatedWatts: number | null;
+      status: string;
+      devices?: {
+        entityId: string;
+        name: string;
+        targetState: string;
+        status: string;
+      }[];
+    }[];
+  };
+  powerSupply?: {
+    state: "grid" | "battery" | "solar" | "generator" | "none" | "unknown";
+    isOnBattery: boolean | null;
+    observedAtUtc: string | null;
+    sources: { entityId: string; state: string }[];
+  };
   currentControls?: CurrentControl[];
   restoreQueue?: RestoreQueueEntry[];
+  gridOutageRisk?: GridOutageRisk;
   smartPowerOffEnabled?: boolean;
   smartPowerOffStatus?:
     | "off"
@@ -127,7 +226,9 @@ export interface SmartUsagePlan {
   revision: string;
 }
 export interface HomeSettings {
+  devicePowerStandards?: Record<string, DevicePowerSettings | null>;
   evCharging?: Record<string, EvChargingSettings | null>;
+  gridOutageRisk?: GridOutageRisk;
   smartPowerOffEnabled?: boolean;
   shutoffLevels?: Record<string, ShutoffLevel>;
   thermostatLimits?: Record<string, { minF: number; maxF: number }>;

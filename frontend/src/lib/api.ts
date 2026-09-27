@@ -5,6 +5,8 @@ import type {
   Command,
   HomeSettings,
   SmartUsagePlan,
+  EvBatterySettings,
+  EvVehicle,
 } from "./types";
 export type TokenProvider = () => Promise<string | null>;
 export function createApi(getToken: TokenProvider) {
@@ -60,6 +62,11 @@ export function createApi(getToken: TokenProvider) {
         method: "PUT",
         body: JSON.stringify(settings),
       }),
+    anomalySavings: (homeId: string, enabled: boolean) =>
+      request<Home>(`/homes/${homeId}/anomaly-savings`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled }),
+      }),
     smartPowerOff: (homeId: string, enabled: boolean) =>
       request<Home>(`/homes/${homeId}/smart-power-off`, {
         method: "PUT",
@@ -95,15 +102,48 @@ export function createApi(getToken: TokenProvider) {
       entityId: string,
       amps: number,
       idempotencyKey: string,
+      chargeLimitPercent?: number,
+      vehicleId?: string,
+      startCharge?: boolean,
     ) =>
       request<Command>(`/homes/${homeId}/ev/current`, {
         method: "POST",
-        body: JSON.stringify({ entityId, amps, idempotencyKey }),
+        body: JSON.stringify({
+          entityId,
+          amps,
+          idempotencyKey,
+          chargeLimitPercent,
+          vehicleId,
+          startCharge,
+        }),
+      }),
+    saveEvVehicle: (homeId: string, vehicle: EvVehicle) =>
+      request<Home>(`/homes/${homeId}/ev/vehicles`, {
+        method: "PUT",
+        body: JSON.stringify(vehicle),
+      }),
+    evBatterySettings: (
+      homeId: string,
+      entityId: string,
+      settings: EvBatterySettings | null,
+    ) =>
+      request<Home>(`/homes/${homeId}/ev/battery`, {
+        method: "PUT",
+        body: JSON.stringify({ entityId, settings }),
       }),
     turnOff: (homeId: string, entityIds: string[], idempotencyKey: string) =>
       request<Command[]>(`/homes/${homeId}/commands`, {
         method: "POST",
         body: JSON.stringify({ entityIds, idempotencyKey }),
+      }),
+    turnOffAnomalies: (
+      homeId: string,
+      entityIds: string[],
+      idempotencyKey: string,
+    ) =>
+      request<Command[]>(`/homes/${homeId}/commands`, {
+        method: "POST",
+        body: JSON.stringify({ entityIds, idempotencyKey, forAnomaly: true }),
       }),
     revoke: (homeId: string) =>
       request<void>(`/homes/${homeId}/connection`, { method: "DELETE" }),

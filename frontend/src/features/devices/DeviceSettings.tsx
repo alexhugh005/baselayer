@@ -20,6 +20,31 @@ export function DeviceSettings({
   onClose: () => void;
   onSaved: (home: Home) => void;
 }) {
+  const categories = home.deviceCategories ?? [];
+  const [standards, setStandards] = useState(() =>
+    Object.fromEntries(
+      home.devices.map((d) => [
+        d.entityId,
+        {
+          category: d.category ?? "",
+          watts:
+            d.standardWattsOverride == null
+              ? ""
+              : String(d.standardWattsOverride),
+        },
+      ]),
+    ),
+  );
+  const invalidStandards = Object.values(standards).some(
+    ({ category, watts }) =>
+      !!category &&
+      ((category === "custom" && watts.trim() === "") ||
+        (watts !== "" &&
+          (watts.trim() === "" ||
+            !Number.isFinite(Number(watts)) ||
+            Number(watts) < 1 ||
+            Number(watts) > 1_000_000))),
+  );
   const [evCharging, setEvCharging] = useState<
     Record<string, EvChargingSettings | null>
   >(() =>
@@ -84,12 +109,24 @@ export function DeviceSettings({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function save() {
-    if (invalidLimits || invalidEv) return;
+    if (invalidLimits || invalidEv || invalidStandards) return;
     setBusy(true);
     setError("");
     try {
       const updatedHome = await api.settings(home.id, {
         evCharging,
+        devicePowerStandards: Object.fromEntries(
+          Object.entries(standards).map(([id, config]) => [
+            id,
+            config.category
+              ? {
+                  category: config.category,
+                  standardWatts:
+                    config.watts === "" ? null : Number(config.watts),
+                }
+              : null,
+          ]),
+        ),
         thermostatLimits: Object.fromEntries(
           Object.entries(thermostatLimits).map(([id, range]) => [
             id,
@@ -194,17 +231,21 @@ export function DeviceSettings({
         </div>
         {showSmartInfo && (
           <p className="muted" id="smart-shutoff-help">
-            Smart Shutoff allows devices to turn off when needed to keep your
-            home's load below the battery's power limit. Never devices are left
-            alone. Sometimes devices need your approval. Anytime devices can
-            turn off automatically. Paired EV chargers reduce their current
-            first when they can keep charging below 11 kW. Devices turned off by
-            Base Layer join a restore queue, using their power draw before
-            shutoff as an estimate. When there is enough spare capacity, they
-            turn back on one at a time. Demo timing: 15 seconds off, 5 seconds
-            of stable headroom, and 5 seconds between restorations. Reduced EVs
-            gradually return to their original current limit as capacity opens
-            up. We leave at least 0.5 kW of spare capacity. Unknown usage pauses
+            Smart Shutoff acts at medium or high grid outage risk to keep usage
+            below 11 kW. Low risk allows usage above 11 kW. Never devices are
+            left alone. When Anomaly savings detection is on, Sometimes and
+            Anytime devices can also turn off for excess usage. Sometimes
+            devices need your approval at medium risk and can turn off
+            automatically at high risk. Anytime devices can turn off
+            automatically at either elevated level. Paired Anytime EV chargers
+            reduce their current first when they can keep charging below 11 kW.
+            Devices turned off by Base Layer join a restore queue, using their
+            power draw before shutoff as an estimate. When there is enough spare
+            capacity or grid risk returns to low, they turn back on one at a
+            time. Demo timing: 15 seconds off, 5 seconds of stable headroom, and
+            5 seconds between restorations. Reduced EVs gradually return to
+            their original current limit as capacity opens up. At elevated risk
+            we leave at least 0.5 kW of spare capacity. Unknown usage pauses
             restoration.
           </p>
         )}
@@ -219,6 +260,14 @@ export function DeviceSettings({
         </label>
       </section>
       <h3>Devices</h3>
+      <p className="muted">
+        Choose a category to monitor each device against an estimated standard
+        power draw. A reading at least 50% above standard triggers an alert and,
+        when Anomaly savings and device permissions allow, automatic shutoff.
+        Set watts from the appliance label or its normal operating draw to
+        refine the estimate. Watts measure power; 1,200 W used continuously for
+        one hour is 1.2 kWh.
+      </p>
       <label className="field">
         Find a device
         <input
@@ -256,6 +305,77 @@ export function DeviceSettings({
               <tr key={d.entityId} role="row">
                 <th scope="row" role="rowheader">
                   <span>{d.name}</span>
+                  <fieldset className="temperature-limits">
+                    <legend>Anomaly detection</legend>
+                    <label className="field">
+                      Device category
+                      <Select
+                        aria-label={`${d.name} category`}
+                        value={standards[d.entityId].category}
+                        onChange={(e) =>
+                          setStandards((current) => ({
+                            ...current,
+                            [d.entityId]: {
+                              category: e.target.value,
+                              watts: "",
+                            },
+                          }))
+                        }
+                      >
+                        <option value="">
+                          Unassigned — no standard monitoring
+                        </option>
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                    {standards[d.entityId].category && (
+                      <>
+                        <label className="field">
+                          Standard power (W)
+                          <input
+                            type="number"
+                            min="1"
+                            max="1000000"
+                            step="any"
+                            aria-label={`${d.name} standard power (W)`}
+                            placeholder={String(
+                              categories.find(
+                                (c) => c.id === standards[d.entityId].category,
+                              )?.standardWatts ?? "Enter watts",
+                            )}
+                            value={standards[d.entityId].watts}
+                            onChange={(e) =>
+                              setStandards((current) => ({
+                                ...current,
+                                [d.entityId]: {
+                                  ...current[d.entityId],
+                                  watts: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                        <small className="muted">
+                          {(() => {
+                            const config = standards[d.entityId];
+                            const watts =
+                              config.watts === ""
+                                ? categories.find(
+                                    (c) => c.id === config.category,
+                                  )?.standardWatts
+                                : Number(config.watts);
+                            return watts && Number.isFinite(watts) && watts > 0
+                              ? `${config.watts === "" ? "Category estimate" : "Custom standard"}: ${watts.toLocaleString()} W. Action at ${(watts * 1.5).toLocaleString()} W or more.`
+                              : "Enter standard power to enable monitoring.";
+                          })()}
+                        </small>
+                      </>
+                    )}
+                  </fieldset>
                 </th>
                 <td role="cell" data-label="Power sensor">
                   <Select
@@ -456,7 +576,7 @@ export function DeviceSettings({
           checked={future}
           onChange={(e) => setFuture(e.target.checked)}
         />
-        Set new devices to Sometimes (approval required)
+        Set new devices to Sometimes (automatic shutoff at high grid risk)
       </label>
       <details className="sensor-pairing-help">
         <summary>About sensor pairing</summary>
@@ -470,6 +590,12 @@ export function DeviceSettings({
       {invalidLimits && (
         <p role="alert">
           Enter two-digit temperatures with the minimum below the maximum.
+        </p>
+      )}
+      {invalidStandards && (
+        <p role="alert">
+          Enter standard power from 1 to 1,000,000 W. Other / custom requires a
+          value.
         </p>
       )}
       {invalidEv && (
@@ -491,7 +617,7 @@ export function DeviceSettings({
           Cancel
         </Button>
         <Button
-          disabled={busy || invalidLimits || invalidEv}
+          disabled={busy || invalidLimits || invalidEv || invalidStandards}
           onClick={() => void save()}
         >
           {busy ? "Saving…" : "Save settings"}

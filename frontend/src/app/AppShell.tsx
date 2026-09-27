@@ -6,6 +6,7 @@ import {
   Settings,
   Lightbulb,
   CircuitBoard,
+  Car,
 } from "lucide-react";
 
 export function AppShell({
@@ -91,6 +92,20 @@ export function AppShell({
               >
                 <CircuitBoard size={18} />
                 <span className="nav-label">Smart Panel</span>
+              </a>
+              <a
+                className={`nav-item${window.location.pathname === "/ev-charging" ? " active" : ""}`}
+                href="/ev-charging"
+                aria-current={
+                  window.location.pathname === "/ev-charging"
+                    ? "page"
+                    : undefined
+                }
+                aria-label="EV charging"
+                title="EV charging"
+              >
+                <Car size={18} />
+                <span className="nav-label">EV charging</span>
               </a>
               <a
                 className={`nav-item${window.location.pathname === "/settings" ? " active" : ""}`}

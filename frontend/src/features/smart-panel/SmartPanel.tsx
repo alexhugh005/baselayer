@@ -133,10 +133,6 @@ export function CircuitPanel({
           </span>
         )}
       </div>
-      <p className="circuit-help">
-        Turning a circuit off cuts power to its connected devices. Turning it on
-        restores the breaker; devices may need to be restarted separately.
-      </p>
       {offline && (
         <p role="status" className="notice">
           Circuit controls are unavailable until fresh Home Assistant readings
@@ -222,6 +218,16 @@ function CircuitRow({
   const name = device.name
     .replace(/^SPAN\s+Panel\s*/i, "")
     .replace(/\s+Breaker$/i, "");
+  const updating = busy || !!pending;
+  const updatingPriority =
+    savingPriority || pending?.action === "SetCircuitPriority";
+  const targetState = pending
+    ? pending.action === "On"
+      ? "on"
+      : "off"
+    : on
+      ? "off"
+      : "on";
   const outcome = latest ?? tracked;
   const failure =
     !busy &&
@@ -230,6 +236,7 @@ function CircuitRow({
     ["Failed", "Expired", "Cancelled"].includes(outcome.status)
       ? (outcome.message ?? `Command ${outcome.status.toLowerCase()}.`)
       : "";
+  const feedback = updating ? "" : error || failure;
   async function toggle() {
     if (!known || pending || sending.current) return;
     sending.current = true;
@@ -296,8 +303,40 @@ function CircuitRow({
         </span>
         <div className="circuit-label">
           <h3>{name}</h3>
-          <span className="circuit-state">
-            {known ? (on ? "On" : "Off") : "Unavailable"}
+          <span
+            className={`circuit-state${feedback ? " circuit-state-error" : ""}`}
+            role={updating ? "status" : feedback ? "alert" : undefined}
+            aria-label={
+              updating
+                ? updatingPriority
+                  ? `Updating ${name} grid outage setting`
+                  : `Turning ${name} ${targetState}`
+                : undefined
+            }
+          >
+            {updating ? (
+              <>
+                <LoaderCircle size={16} className="spin" aria-hidden="true" />
+                <span>
+                  {updatingPriority
+                    ? "Saving setting…"
+                    : `Turning ${targetState}…`}
+                </span>
+              </>
+            ) : feedback ? (
+              <>
+                <TriangleAlert size={16} aria-hidden="true" />
+                <span>{feedback}</span>
+              </>
+            ) : known ? (
+              on ? (
+                "On"
+              ) : (
+                "Off"
+              )
+            ) : (
+              "Unavailable"
+            )}
           </span>
         </div>
         <button
@@ -348,24 +387,6 @@ function CircuitRow({
             battery kicks in during an outage. Set it to “Turn off”.
           </p>
         </div>
-      )}
-      {(busy || pending) && (
-        <p
-          className="circuit-feedback"
-          role="status"
-          aria-label={
-            savingPriority || pending?.action === "SetCircuitPriority"
-              ? `Updating ${name} grid outage setting`
-              : `Turning ${name} ${pending ? (pending.action === "On" ? "on" : "off") : on ? "off" : "on"}`
-          }
-        >
-          <LoaderCircle size={18} className="spin" aria-hidden="true" />
-        </p>
-      )}
-      {(error || failure) && (
-        <p className="error circuit-feedback" role="alert">
-          {error || failure}
-        </p>
       )}
     </article>
   );

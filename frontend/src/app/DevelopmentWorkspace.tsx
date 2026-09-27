@@ -1,3 +1,4 @@
+import { EvCharging } from "../features/ev-charging/EvCharging";
 import { useMemo, useState } from "react";
 import { AppShell } from "./AppShell";
 import { createApi } from "../lib/api";
@@ -31,6 +32,8 @@ export function DevelopmentWorkspace() {
             <OAuthCallback api={api} />
           ) : window.location.pathname === "/smart-panel" ? (
             <SmartPanel api={api} />
+          ) : window.location.pathname === "/ev-charging" ? (
+            <EvCharging api={api} />
           ) : window.location.pathname === "/smart-usage" ? (
             <SmartUsage api={api} />
           ) : (

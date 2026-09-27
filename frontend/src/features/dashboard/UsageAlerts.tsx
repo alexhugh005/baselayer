@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Home } from "../../lib/types";
+import { anomalyDescription } from "./AnomalySavings";
 import { formatPower } from "./power";
 
 export function hasUsageReading(home: Home) {
@@ -14,7 +15,11 @@ export function hasUsageReading(home: Home) {
 }
 
 export function isUsageHigh(home: Home) {
-  return hasUsageReading(home) && home.householdWatts! >= home.limitWatts;
+  return (
+    (home.gridOutageRisk === "medium" || home.gridOutageRisk === "high") &&
+    hasUsageReading(home) &&
+    home.householdWatts! >= home.limitWatts
+  );
 }
 
 export function UsageAlerts({
@@ -54,7 +59,8 @@ export function UsageAlerts({
   }
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const notified = useRef(new Set<string>());
+  const notified = useRef(new Map<string, string>());
+  const anomalyNotified = useRef(new Set<string>());
   const automaticNotified = useRef(new Set<string>());
   const automaticLoaded = useRef(false);
 
@@ -79,7 +85,9 @@ export function UsageAlerts({
       const confirmed = (home.commands ?? []).filter(
         (c) =>
           c.automatic &&
+          !c.anomalyId &&
           c.action !== "On" &&
+          !c.isRestoration &&
           c.status === "Confirmed" &&
           !automaticNotified.current.has(c.id),
       );
@@ -93,13 +101,16 @@ export function UsageAlerts({
         recent.length
       ) {
         try {
-          const names = recent.map(
-            (c) =>
+          const changes = recent.map((c) => {
+            const name =
               home.devices.find((d) => d.entityId === c.entityId)?.name ??
-              c.entityId,
-          );
+              c.entityId;
+            return c.action === "SetCurrent"
+              ? `Reduced ${name} charging to ${c.currentAmps} A`
+              : `Turned off ${name}`;
+          });
           const notification = new Notification(`${home.name}: Smart Shutoff`, {
-            body: `Turned off ${names.join(", ")} to reduce usage.${home.smartPowerOffStatus === "insufficient" ? " More devices need to be turned off to get below the limit. Open Base Layer to review." : home.smartPowerOffStatus === "review" ? " Usage is still high. Open Base Layer to review Sometimes devices." : ""}`,
+            body: `${changes.join("; ")} to reduce usage.${home.smartPowerOffStatus === "insufficient" ? " More devices need to be turned off to get below the limit. Open Base Layer to review." : home.smartPowerOffStatus === "review" ? " Usage is still high. Open Base Layer to review Sometimes devices." : ""}`,
             tag: `smart-power-off-${home.id}`,
           });
           notification.onclick = () => {
@@ -130,7 +141,7 @@ export function UsageAlerts({
   useEffect(() => {
     if (stale) return;
     const existing = new Set(homes.map((home) => home.id));
-    for (const id of notified.current) {
+    for (const id of notified.current.keys()) {
       if (!existing.has(id)) notified.current.delete(id);
     }
     for (const home of homes) {
@@ -140,7 +151,13 @@ export function UsageAlerts({
         notified.current.delete(home.id);
         continue;
       }
-      if (!enabled || notified.current.has(home.id)) continue;
+      if (home.smartPowerOffStatus === "reducing") continue;
+      const devices = (home.devices ?? []).filter((d) => d.recommended);
+      const signature = `${home.gridOutageRisk}:${home.smartPowerOffStatus}:${devices
+        .map((d) => d.entityId)
+        .sort()
+        .join(",")}`;
+      if (!enabled || notified.current.get(home.id) === signature) continue;
       if (!supported || Notification.permission !== "granted") {
         setEnabled(false);
         setMessage(
@@ -149,19 +166,16 @@ export function UsageAlerts({
         break;
       }
       try {
-        const notification = new Notification(
-          `${home.name}: usage limit reached`,
-          {
-            body: `${home.powerSource === "deviceSum" ? "Monitored device usage" : "Household usage"} is ${formatPower(home.householdWatts)}. Limit: ${formatPower(home.limitWatts)}. Open Base Layer to review devices.`,
-            tag: `usage-${home.id}`,
-          },
-        );
+        const notification = new Notification(`${home.name}: action needed`, {
+          body: `Grid outage risk is ${home.gridOutageRisk}. Usage is ${formatPower(home.householdWatts)}; keep below ${formatPower(home.limitWatts)}. ${devices.length ? `Turn off ${devices.map((d) => d.name).join(", ")}. ` : ""}${home.smartPowerOffStatus === "insufficient" || !devices.length ? "Additional appliances must be turned off to get below the limit. " : ""}Open Base Layer to review devices.`,
+          tag: `usage-${home.id}`,
+        });
         notification.onclick = () => {
           window.focus();
           onSelect(home.id);
           notification.close();
         };
-        notified.current.add(home.id);
+        notified.current.set(home.id, signature);
       } catch {
         setEnabled(false);
         setMessage(
@@ -171,6 +185,62 @@ export function UsageAlerts({
       }
     }
   }, [homes, stale, enabled, supported, onSelect]);
+
+  useEffect(() => {
+    if (
+      stale ||
+      !enabled ||
+      !supported ||
+      Notification.permission !== "granted"
+    )
+      return;
+    const storageKey = `${preferenceKey}:anomalies-seen`;
+    let seen: string[] = [];
+    try {
+      const stored: unknown = JSON.parse(
+        localStorage.getItem(storageKey) ?? "[]",
+      );
+      if (Array.isArray(stored))
+        seen = stored.filter((id): id is string => typeof id === "string");
+    } catch {
+      /* Keep in-memory deduplication when storage is unavailable. */
+    }
+    for (const home of homes) {
+      for (const anomaly of home.anomalies ?? []) {
+        if (anomaly.status === "Queued") continue;
+        const key = `${anomaly.id}:${anomaly.status === "Confirmed" ? "confirmed" : "detected"}`;
+        if (seen.includes(key) || anomalyNotified.current.has(key)) continue;
+        seen.push(key);
+        anomalyNotified.current.add(key);
+        if (Date.now() - Date.parse(anomaly.detectedUtc) > 5 * 60 * 1000)
+          continue;
+        try {
+          const notification = new Notification(
+            `${home.name}: unusual device usage`,
+            {
+              body: `${anomalyDescription(home, anomaly)} ${anomaly.message}`,
+              tag: `anomaly-${anomaly.id}`,
+            },
+          );
+          notification.onclick = () => {
+            window.focus();
+            onSelect(home.id);
+            notification.close();
+          };
+        } catch {
+          setEnabled(false);
+          setMessage(
+            "Browser notifications are unavailable. In-site anomaly alerts remain active.",
+          );
+        }
+      }
+    }
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(seen.slice(-300)));
+    } catch {
+      /* In-memory fallback. */
+    }
+  }, [homes, stale, enabled, supported, preferenceKey, onSelect]);
 
   async function enable() {
     setBusy(true);
@@ -205,8 +275,9 @@ export function UsageAlerts({
             <div>
               <h3>Browser notifications</h3>
               <p className="muted" id="notification-help">
-                Notify me when a home reaches its usage limit or Smart Shutoff
-                confirms a device shutoff. Works while Base Layer is open.
+                Notify me when grid outage risk requires action or Smart Shutoff
+                confirms a device reduction, or unusual device usage is
+                detected. Works while Base Layer is open.
               </p>
               {(message || !supported || busy) && (
                 <p className="settings-status" role="status">

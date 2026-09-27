@@ -22,6 +22,7 @@ function setup(overrides: Partial<Home> = {}) {
     lastSeenUtc: new Date().toISOString(),
     householdWatts: 100,
     limitWatts: 11000,
+    gridOutageRisk: "medium",
     projectedWatts: 100,
     commands: [],
     baseUrl: "http://home.local",

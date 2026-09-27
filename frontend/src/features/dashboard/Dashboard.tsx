@@ -17,6 +17,8 @@ import { DeleteHomeDialog } from "../connections/DeleteHomeDialog";
 import { useHomes } from "./useHomes";
 import { recommendationIds, formatPower } from "./power";
 import { smartPowerOffMessage } from "./smartPowerOffMessage";
+import { AnomalyRecommendation, anomalyDevices } from "./AnomalyRecommendation";
+import { AnomalySavingsSetting } from "./AnomalySavings";
 import { SmartShutoffSetting } from "./SmartShutoffSetting";
 import { RestoreQueue } from "../devices/RestoreQueue";
 import { UsageOverview } from "./UsageOverview";
@@ -41,6 +43,9 @@ export function Dashboard({
   userId?: string;
 }) {
   const [deletingHome, setDeletingHome] = useState<Home | null>(null);
+  const [recommendationKind, setRecommendationKind] = useState<
+    "usage" | "anomaly"
+  >("usage");
   const [recommendationsHome, setRecommendationsHome] = useState<string | null>(
     null,
   );
@@ -59,6 +64,11 @@ export function Dashboard({
     homes.find((h) => h.id === active) ??
     homes.find((h) => !h.revoked) ??
     homes[0];
+  const unusualDevices = home ? anomalyDevices(home) : [];
+  const reviewDevices =
+    recommendationKind === "anomaly"
+      ? unusualDevices
+      : (home?.devices.filter((d) => d.recommended) ?? []);
   const devices = home?.devices.filter((device) => !device.isCircuit) ?? [];
   const savingDeviceSettings = useRef(false);
   const [connectingDevice, setConnectingDevice] = useState("");
@@ -172,16 +182,20 @@ export function Dashboard({
   const commands = useShutoffApproval(api, home, !!error, refresh);
   const { selectedDevices, setSelected } = commands;
   const high = home && !error && isUsageHigh(home);
+  const anomalySubmission =
+    recommendationsHome === home?.id && recommendationKind === "anomaly";
   const syncing =
     home &&
     !error &&
     (home.smartPowerOffStatus === "reducing" ||
-      commands.busyHomeId === home.id ||
+      (commands.busyHomeId === home.id && !anomalySubmission) ||
       (home.connected &&
-        home.commands.some((command) =>
-          ["Pending", "AwaitingConfirmation", "Retrying"].includes(
-            command.status,
-          ),
+        home.commands.some(
+          (command) =>
+            !command.anomalyId &&
+            ["Pending", "AwaitingConfirmation", "Retrying"].includes(
+              command.status,
+            ),
         )));
   const usageProgress = syncing
     ? commands.busyHomeId === home?.id && commands.syncingHomeId !== home?.id
@@ -217,6 +231,27 @@ export function Dashboard({
           ) : (
             homes.map((home) => (
               <SmartShutoffSetting
+                key={home.id}
+                home={home}
+                api={api}
+                stale={!!error}
+                onSaved={updateHome}
+              />
+            ))
+          )}
+        </section>
+        <section
+          className="settings-section"
+          aria-label="Anomaly savings detection"
+        >
+          <h2>Anomaly savings detection</h2>
+          {loading ? (
+            <p role="status">Loading your homes…</p>
+          ) : homes.length === 0 && !error ? (
+            <p className="muted">Connect a home to enable anomaly savings.</p>
+          ) : (
+            homes.map((home) => (
+              <AnomalySavingsSetting
                 key={home.id}
                 home={home}
                 api={api}
@@ -300,8 +335,13 @@ export function Dashboard({
           <UsageOverview home={home} />
           {home.smartPowerOffEnabled && (
             <p className="muted">
-              Smart Shutoff is on · Anytime devices can reduce charging or turn
-              off automatically.
+              Smart Shutoff is on · Grid outage risk:{" "}
+              {home.gridOutageRisk ?? "low"}.
+              {home.gridOutageRisk === "high"
+                ? " Anytime and Sometimes devices can turn off automatically."
+                : home.gridOutageRisk === "medium"
+                  ? " Anytime devices can reduce charging or turn off automatically."
+                  : " Usage above 11 kW is allowed."}
             </p>
           )}
           <CollapsingNotice
@@ -323,7 +363,7 @@ export function Dashboard({
               <div>
                 <h2>
                   {syncing
-                    ? home.smartPowerOffEnabled
+                    ? home.smartPowerOffStatus === "reducing"
                       ? "Smart Shutoff is checking usage"
                       : "Updating home usage"
                     : "Reduce usage"}
@@ -349,6 +389,7 @@ export function Dashboard({
                 variant="secondary"
                 disabled={!!syncing}
                 onClick={() => {
+                  setRecommendationKind("usage");
                   setSelected(
                     recommendationIds(home.devices).filter(
                       (id) => !id.startsWith("climate."),
@@ -361,6 +402,31 @@ export function Dashboard({
               </Button>
             </section>
           </CollapsingNotice>
+          <AnomalyRecommendation
+            key={`anomaly-${home.id}`}
+            home={home}
+            stale={!!error}
+            busy={
+              anomalySubmission &&
+              (commands.busyHomeId === home.id ||
+                commands.syncingHomeId === home.id)
+            }
+            onReview={() => {
+              setRecommendationKind("anomaly");
+              setSelected(
+                unusualDevices
+                  .filter(
+                    (d) =>
+                      d.allowed &&
+                      d.shutoffLevel !== "Never" &&
+                      !d.isCircuit &&
+                      !d.entityId.startsWith("climate."),
+                  )
+                  .map((d) => d.entityId),
+              );
+              setRecommendationsHome(home.id);
+            }}
+          />
           {!high && !syncing && !home.connected ? (
             <div className="calm-note">
               <ShieldCheck size={19} />
@@ -498,14 +564,34 @@ export function Dashboard({
             setRecommendationsHome(null);
           }}
         >
-          {smartPowerOffMessage(home) && (
+          {recommendationKind === "usage" && smartPowerOffMessage(home) && (
             <p role="status">{smartPowerOffMessage(home)}</p>
           )}
           <DeviceList
-            devices={home.devices.filter((d) => d.recommended)}
+            devices={reviewDevices.map((d) =>
+              recommendationKind === "anomaly"
+                ? {
+                    ...d,
+                    recommended: true,
+                    allowed: d.allowed && !d.isCircuit,
+                  }
+                : d,
+            )}
             selected={selectedDevices.map((d) => d.entityId)}
             disabled={
-              !home.connected || !!error || commands.busy || !!commands.approval
+              !home.connected ||
+              home.revoked ||
+              !!error ||
+              commands.busy ||
+              !!commands.approval ||
+              (recommendationKind === "anomaly" &&
+                home.commands.some(
+                  (c) =>
+                    reviewDevices.some((d) => d.entityId === c.entityId) &&
+                    ["Pending", "AwaitingConfirmation", "Retrying"].includes(
+                      c.status,
+                    ),
+                ))
             }
             onToggle={(id) =>
               setSelected((ids) =>
@@ -515,11 +601,13 @@ export function Dashboard({
               )
             }
           />
-          <ProjectedUsage
-            home={home}
-            devices={selectedDevices}
-            stale={!!error}
-          />
+          {recommendationKind === "usage" && (
+            <ProjectedUsage
+              home={home}
+              devices={selectedDevices}
+              stale={!!error}
+            />
+          )}
           {commands.error && (
             <p className="error" role="alert">
               {commands.error}
@@ -534,12 +622,31 @@ export function Dashboard({
             <Button
               disabled={
                 !selectedDevices.length ||
+                (recommendationKind === "anomaly" &&
+                  (selectedDevices.some(
+                    (d) =>
+                      !reviewDevices.some(
+                        (current) => current.entityId === d.entityId,
+                      ),
+                  ) ||
+                    home.commands.some(
+                      (c) =>
+                        reviewDevices.some((d) => d.entityId === c.entityId) &&
+                        [
+                          "Pending",
+                          "AwaitingConfirmation",
+                          "Retrying",
+                        ].includes(c.status),
+                    ))) ||
                 !home.connected ||
                 !!error ||
                 commands.busy
               }
               onClick={async () => {
-                if (await commands.sendSelected()) setRecommendationsHome(null);
+                if (
+                  await commands.sendSelected(recommendationKind === "anomaly")
+                )
+                  setRecommendationsHome(null);
               }}
             >
               <Power size={17} />{" "}

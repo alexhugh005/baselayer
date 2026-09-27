@@ -18,6 +18,7 @@ const home = (values: Partial<Home> = {}) =>
     revoked: false,
     householdWatts: 11000,
     limitWatts: 11000,
+    gridOutageRisk: "medium",
     powerSource: "wholeHouseMeter",
     ...values,
   }) as Home;
@@ -337,5 +338,134 @@ describe("Smart Shutoff notifications", () => {
         body: expect.stringContaining("More devices need to be turned off"),
       }),
     );
+  });
+});
+
+describe("grid outage risk alerts", () => {
+  const device = (id: string, name: string) =>
+    ({
+      entityId: id,
+      name,
+      recommended: true,
+      shutoffLevel: "Sometimes",
+    }) as Home["devices"][number];
+
+  it("allows over-limit usage without notifications at low risk", () => {
+    const { send } = notifications();
+    localStorage.setItem("base-layer-notifications", "true");
+    const current = home({ gridOutageRisk: "low", householdWatts: 23000 });
+    expect(isUsageHigh(current)).toBe(false);
+    render(<UsageAlerts homes={[current]} stale={false} onSelect={() => {}} />);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("waits for reductions and names every needed Sometimes device, updating when the list changes", () => {
+    const { send } = notifications();
+    localStorage.setItem("base-layer-notifications", "true");
+    const current = home({
+      smartPowerOffEnabled: true,
+      smartPowerOffStatus: "reducing",
+      devices: [],
+    });
+    const view = render(
+      <UsageAlerts homes={[current]} stale={false} onSelect={() => {}} />,
+    );
+    expect(send).not.toHaveBeenCalled();
+    const review = {
+      ...current,
+      smartPowerOffStatus: "review" as const,
+      devices: [device("switch.dryer", "Dryer"), device("switch.oven", "Oven")],
+    };
+    view.rerender(
+      <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
+    );
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      "My home: action needed",
+      expect.objectContaining({
+        body: expect.stringContaining("Turn off Dryer, Oven."),
+      }),
+    );
+    view.rerender(
+      <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
+    );
+    expect(send).toHaveBeenCalledTimes(1);
+    view.rerender(
+      <UsageAlerts
+        homes={[
+          {
+            ...review,
+            smartPowerOffStatus: "insufficient",
+            devices: [...review.devices, device("switch.pool", "Pool")],
+          },
+        ]}
+        stale={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1][1].body).toContain("Turn off Dryer, Oven, Pool.");
+    expect(send.mock.calls[1][1].body).toContain("Additional appliances");
+    view.rerender(
+      <UsageAlerts
+        homes={[{ ...review, gridOutageRisk: "low" }]}
+        stale={false}
+        onSelect={() => {}}
+      />,
+    );
+    view.rerender(
+      <UsageAlerts homes={[review]} stale={false} onSelect={() => {}} />,
+    );
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+
+  it("describes EV current reductions and does not misreport current restoration as a shutoff", () => {
+    const { send } = notifications();
+    localStorage.setItem("base-layer-notifications", "true");
+    const current = home({
+      householdWatts: 10000,
+      devices: [device("switch.ev", "EV")],
+      commands: [
+        {
+          id: "current",
+          entityId: "switch.ev",
+          action: "SetCurrent",
+          currentAmps: 20,
+          automatic: true,
+          status: "Confirmed",
+          attempts: 1,
+          createdUtc: new Date().toISOString(),
+          message: null,
+        },
+      ],
+    });
+    const view = render(
+      <UsageAlerts homes={[current]} stale={false} onSelect={() => {}} />,
+    );
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      "My home: Smart Shutoff",
+      expect.objectContaining({
+        body: "Reduced EV charging to 20 A to reduce usage.",
+      }),
+    );
+    view.rerender(
+      <UsageAlerts
+        homes={[
+          {
+            ...current,
+            commands: [
+              {
+                ...current.commands[0],
+                id: "restore",
+                currentAmps: 32,
+                isRestoration: true,
+              },
+            ],
+          },
+        ]}
+        stale={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,3 +1,4 @@
+import { EvCharging } from "../features/ev-charging/EvCharging";
 import { useMemo } from "react";
 import { ClerkProvider, SignIn, useAuth, UserButton } from "@clerk/react";
 
@@ -28,6 +29,8 @@ function ClerkApp() {
           <OAuthCallback api={api} />
         ) : window.location.pathname === "/smart-panel" ? (
           <SmartPanel api={api} />
+        ) : window.location.pathname === "/ev-charging" ? (
+          <EvCharging key={userId} api={api} />
         ) : window.location.pathname === "/smart-usage" ? (
           <SmartUsage key={userId} api={api} />
         ) : (

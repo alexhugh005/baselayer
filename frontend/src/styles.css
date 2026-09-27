@@ -311,7 +311,7 @@ main {
 }
 .overview-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr));
   gap: 24px;
   margin: 0 0 24px;
 }
@@ -379,6 +379,54 @@ main {
 .usage-card .muted {
   color: #e5ebdf;
   margin: 12px 0 0;
+}
+.usage-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.usage-over-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--gold);
+  color: var(--warning-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.usage-meter {
+  position: relative;
+  overflow: visible;
+  transition: width 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.usage-meter > div {
+  position: relative;
+  z-index: 1;
+  transition: width 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.usage-meter-overflow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold);
+  transition: width 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .usage-meter,
+  .usage-meter > div,
+  .usage-meter-overflow {
+    transition: none;
+  }
+}
+.usage-card-over .usage-over-amount {
+  color: var(--gold);
+  font-weight: 500;
 }
 .metric-card {
   padding: 28px;
@@ -1240,7 +1288,7 @@ dialog p.error {
     height: 24px;
   }
   .overview-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .usage-card {
     grid-column: 1 / -1;
@@ -1459,7 +1507,7 @@ dialog p.error {
   }
   .overview-grid {
     gap: 16px;
-    grid-template-columns: 1.3fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .usage-card,
   .metric-card {
@@ -1548,7 +1596,7 @@ dialog p.error {
     font-size: 16px;
   }
   .overview-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
   .usage-card {
@@ -1845,6 +1893,9 @@ dialog p.error {
 }
 .settings-page .page-heading {
   margin-bottom: 36px;
+}
+.settings-page > .settings-section {
+  margin-top: 32px;
 }
 .settings-section > h2 {
   font-size: 16px;
@@ -2335,24 +2386,10 @@ dialog p.error {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.smart-range-labels {
+.smart-runtime-presets {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: start;
-  justify-content: space-between;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  font-size: 14px;
-}
-.smart-range-labels > div {
-  display: grid;
-  gap: 4px;
-}
-.smart-range-labels > div:last-child {
-  text-align: right;
-}
-.smart-range-labels span {
-  color: var(--secondary);
-  font-size: 12px;
 }
 .smart-plan-result {
   display: flex;
@@ -2487,9 +2524,6 @@ dialog p.error {
     flex-direction: column;
     gap: 16px;
   }
-  .smart-range-labels {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .smart-target {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
@@ -2497,11 +2531,6 @@ dialog p.error {
   .smart-target > strong,
   .smart-target > p {
     text-align: left;
-  }
-  .smart-range-labels .button {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: center;
   }
   .smart-home-picker {
     display: grid;
@@ -2640,11 +2669,32 @@ dialog p.error {
   overflow-wrap: anywhere;
 }
 .circuit-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
   color: #68665f;
   font-size: 13px;
 }
+.circuit-state svg {
+  flex-shrink: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .circuit-state .spin {
+    animation: none;
+  }
+}
 .is-on .circuit-state {
   color: #1e4d2b;
+}
+.circuit-state.circuit-state-error {
+  align-items: flex-start;
+  color: var(--warning-text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.circuit-state-error svg {
+  margin-top: 2px;
 }
 .circuit-feedback {
   margin: 12px 0 0;
@@ -3233,4 +3283,8 @@ dialog p.error {
   .ev-charge-input input {
     height: 42px;
   }
+}
+
+.savings-card .eyebrow svg {
+  flex-shrink: 0;
 }

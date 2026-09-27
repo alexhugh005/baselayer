@@ -65,7 +65,7 @@ it("sends explicit on/off commands and keeps the observed state until confirmed"
   expect((toggle as HTMLButtonElement).disabled).toBe(true);
   expect(
     screen.getByRole("status", { name: "Turning Living Room off" }).textContent,
-  ).toBe("");
+  ).toBe("Turning off…");
   const offHome = {
     ...home,
     devices: [{ ...home.devices[0], state: "off" }],
@@ -115,7 +115,7 @@ it("saves the native outage setting with a spinner until the panel confirms it",
     screen.getByRole("status", {
       name: "Updating Living Room grid outage setting",
     }).textContent,
-  ).toBe("");
+  ).toBe("Saving setting…");
   const pending = {
     ...command,
     action: "SetCircuitPriority",
@@ -289,6 +289,56 @@ it("shows terminal command failure and allows a fresh attempt", () => {
   expect((screen.getByRole("switch") as HTMLButtonElement).disabled).toBe(
     false,
   );
+});
+
+it("shows a battery-limit refusal beside the circuit status and clears it on retry", async () => {
+  const message = "Kept off: would exceed the 11 kW battery limit.";
+  const blocked = { ...command, action: "On", status: "Failed", message };
+  const circuitCommand = vi.fn().mockResolvedValue({
+    ...command,
+    id: "retry",
+    action: "On",
+  });
+  const offHome = {
+    ...home,
+    devices: [{ ...home.devices[0], state: "off" }],
+    commands: [blocked],
+  } as Home;
+  const { rerender } = render(
+    <CircuitPanel
+      home={offHome}
+      api={{ circuitCommand } as unknown as Api}
+      stale={false}
+      refresh={vi.fn().mockResolvedValue(undefined)}
+    />,
+  );
+  const alert = screen.getByRole("alert");
+  expect(alert.textContent).toBe(message);
+  expect(alert.closest(".circuit-label")).not.toBeNull();
+  expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false");
+  await act(async () => fireEvent.click(screen.getByRole("switch")));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole("status").textContent).toBe("Turning on…");
+  rerender(
+    <CircuitPanel
+      home={
+        {
+          ...offHome,
+          devices: [{ ...home.devices[0], state: "on" }],
+          commands: [
+            { ...command, id: "retry", action: "On", status: "Confirmed" },
+            blocked,
+          ],
+        } as Home
+      }
+      api={{ circuitCommand } as unknown as Api}
+      stale={false}
+      refresh={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
 });
 
 it("shows an empty panel and supports switching homes", async () => {

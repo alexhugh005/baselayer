@@ -1,0 +1,245 @@
+.ev-page {
+  display: grid;
+  gap: 24px;
+  max-width: 760px;
+  margin-inline: auto;
+}
+.ev-page .page-heading {
+  margin-bottom: 8px;
+}
+.ev-page .page-heading h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ev-page .page-heading h1 svg {
+  width: 32px;
+  height: 32px;
+}
+.ev-planner-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+.ev-inputs,
+.ev-result,
+.ev-command {
+  padding: 32px;
+  min-width: 0;
+}
+.ev-inputs h2,
+.ev-result h2,
+.ev-command h2 {
+  color: var(--grounded);
+  margin: 12px 0 24px;
+}
+.ev-inputs .field {
+  margin: 24px 0;
+}
+.ev-inputs input {
+  width: 100%;
+  min-width: 0;
+}
+.ev-charge-limit-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.ev-charge-limit-label strong {
+  color: var(--grounded);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+.ev-inputs small,
+.ev-help,
+.ev-footnote {
+  color: var(--secondary);
+  font-size: 14px;
+}
+.ev-battery-reading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-block: 24px;
+  border-block: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.ev-battery-reading strong {
+  display: block;
+  font-size: 28px;
+  color: var(--grounded);
+}
+.ev-battery-reading div > span {
+  display: block;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.ev-target {
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.ev-page .ev-result {
+  background: var(--subtle-green);
+}
+.ev-page .ev-result-warning {
+  background: var(--warning-surface);
+}
+.ev-rate {
+  font-size: 80px;
+  line-height: 1;
+  color: var(--grounded);
+  margin: 24px 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ev-rate > span {
+  font-size: 28px;
+  margin-left: 8px;
+}
+.ev-estimate-details {
+  margin: 24px 0;
+}
+.ev-estimate-details > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid #1e4d2b26;
+  padding: 12px 0;
+}
+.ev-estimate-details dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+.ev-estimate-details dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ev-result .button {
+  width: 100%;
+}
+.ev-result .ev-help {
+  margin: 16px 0 0;
+}
+.ev-deadline-warning {
+  color: var(--warning-text);
+}
+.ev-setup-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-block: 24px;
+}
+.ev-setup-fields input,
+.ev-setup-fields select {
+  width: 100%;
+  min-width: 0;
+}
+.ev-footnote {
+  max-width: 95ch;
+}
+@media (max-width: 800px) {
+  .ev-planner-grid,
+  .ev-setup-fields {
+    grid-template-columns: 1fr;
+  }
+  .ev-inputs,
+  .ev-result,
+  .ev-command {
+    padding: 24px;
+  }
+}
+
+.ev-vehicle-modal {
+  width: min(680px, calc(100vw - 32px));
+}
+.ev-vehicle-modal .ev-setup-fields > .field:first-child {
+  grid-column: 1 / -1;
+}
+.ev-vehicle-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ev-vehicle-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ev-vehicle-toolbar .smart-home-picker {
+  margin: 0;
+}
+
+.ev-main-card {
+  width: 100%;
+  padding: 24px;
+}
+.ev-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.ev-card-heading h2 {
+  margin-bottom: 0;
+}
+.ev-edit-button {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+}
+.ev-charge-rate {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 24px 0;
+  color: var(--grounded);
+}
+.ev-charge-rate span {
+  display: block;
+  color: var(--secondary);
+  font-size: 14px;
+}
+.ev-charge-rate strong {
+  font-size: 28px;
+}
+.ev-charge-rate small {
+  font-size: 16px;
+  font-weight: 400;
+}
+.ev-start-button {
+  width: 100%;
+}
+
+.ev-main-card .field {
+  margin: 16px 0;
+}
+.ev-charge-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-block: 1px solid var(--border);
+  margin: 20px 0;
+  gap: 16px;
+}
+.ev-charge-stats .ev-battery-reading,
+.ev-charge-stats .ev-charge-rate {
+  border: 0;
+  padding: 16px 0;
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .ev-charge-stats {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

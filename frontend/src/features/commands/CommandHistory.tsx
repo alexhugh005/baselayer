@@ -69,11 +69,16 @@ export function CommandHistory({
                 {c.action === "SetCircuitPriority"
                   ? "· Grid outage setting "
                   : c.action === "SetCurrent"
-                    ? `· ${c.isRestoration ? "Restore charging" : "Charging"} ${c.previousCurrentAmps != null ? `${c.previousCurrentAmps} → ` : ""}${c.currentAmps ?? ""} A `
+                    ? `· ${c.isRestoration ? "Restore charging" : "Charging"} ${c.previousCurrentAmps != null ? `${c.previousCurrentAmps} → ` : ""}${c.currentAmps ?? ""} A${c.chargeLimitPercent != null ? ` · ${c.chargeLimitPercent}% limit` : ""} `
                     : c.action === "On"
                       ? "· Restore "
                       : "· Shutoff "}
-                {c.automatic ? "· Automatic " : ""}· {c.attempts} attempt
+                {c.anomalyId
+                  ? "· Anomaly detection "
+                  : c.automatic
+                    ? "· Automatic "
+                    : ""}
+                · {c.attempts} attempt
                 {c.attempts === 1 ? "" : "s"}
               </small>
             </div>

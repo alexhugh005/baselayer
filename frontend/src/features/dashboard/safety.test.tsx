@@ -28,6 +28,7 @@ function home(): Home {
     lastSeenUtc: null,
     householdWatts: 13000,
     limitWatts: 11000,
+    gridOutageRisk: "medium",
     projectedWatts: 8000,
     commands: [],
     baseUrl: "http://localhost:8123",
@@ -439,7 +440,7 @@ describe("device permissions", () => {
     );
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: "Set new devices to Sometimes (approval required)",
+        name: "Set new devices to Sometimes (automatic shutoff at high grid risk)",
       }),
     );
     await act(async () =>
@@ -581,4 +582,41 @@ it("never exposes unknown household usage as a measured zero", () => {
   render(<UsageOverview home={current} />);
   const meter = screen.queryByRole("meter");
   expect(meter?.getAttribute("aria-valuenow") ?? null).toBeNull();
+  expect(screen.queryByText("Over limit")).toBeNull();
+});
+
+it.each(["low", "medium", "high"] as const)(
+  "shows the over-limit reading even when grid risk is %s",
+  (gridOutageRisk) => {
+    render(
+      <UsageOverview
+        home={{ ...home(), householdWatts: 13400, gridOutageRisk }}
+      />,
+    );
+    expect(screen.getByText("Over limit")).toBeTruthy();
+    expect(screen.getByText("2.40 kW over")).toBeTruthy();
+    const meter = screen.getByRole("meter", { name: "Household power" });
+    expect(meter.getAttribute("aria-valuetext")).toBe(
+      "13.40 kW, 2.40 kW over the 11.00 kW limit",
+    );
+    expect((meter.firstElementChild as HTMLElement).style.width).toBe("100%");
+    expect((meter as HTMLElement).style.width).toBe("80%");
+    expect(
+      parseFloat((meter.lastElementChild as HTMLElement).style.width),
+    ).toBeCloseTo((13400 / 11000) * 100);
+  },
+);
+
+it("clears the over-limit warning when usage returns to the limit or below", () => {
+  const { rerender } = render(<UsageOverview home={home()} />);
+  expect(screen.getByText("Over limit")).toBeTruthy();
+  for (const householdWatts of [11000, 5500, 0]) {
+    rerender(<UsageOverview home={{ ...home(), householdWatts }} />);
+    expect(screen.queryByText("Over limit")).toBeNull();
+    const meter = screen.getByRole("meter", { name: "Household power" });
+    expect(meter.getAttribute("aria-valuenow")).toBe(String(householdWatts));
+    expect((meter.firstElementChild as HTMLElement).style.width).toBe(
+      `${(householdWatts / 11000) * 100}%`,
+    );
+  }
 });

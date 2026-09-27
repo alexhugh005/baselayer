@@ -8,6 +8,7 @@ export interface Approval {
   homeName: string;
   devices: Device[];
   idempotencyKey: string;
+  forAnomaly?: boolean;
 }
 export function useShutoffApproval(
   api: Api,
@@ -79,7 +80,7 @@ export function useShutoffApproval(
     setError("");
     try {
       // Keep this exact key and payload on ambiguous network failures.
-      await api.turnOff(
+      await (operation.forAnomaly ? api.turnOffAnomalies : api.turnOff)(
         operation.homeId,
         operation.devices.map((d) => d.entityId),
         operation.idempotencyKey,
@@ -98,9 +99,10 @@ export function useShutoffApproval(
       setSyncingHomeId(null);
     }
   }
-  async function sendSelected() {
+  async function sendSelected(forAnomaly = false) {
     if (!home || !selectedDevices.length || submitting.current) return;
     const operation = approval ?? {
+      forAnomaly,
       homeId: home.id,
       homeName: home.name,
       devices: selectedDevices.map((d) => ({ ...d })),

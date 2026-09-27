@@ -303,23 +303,33 @@ export function UsagePlanner({
                 );
               }}
             />
-            <div className="smart-range-labels">
-              <div>
-                <strong>Shortest · {duration(plan.shortestHours)}</strong>
-              </div>
-              <Button
-                variant="ghost"
-                disabled={busy || pending}
-                onClick={() => {
-                  setTarget(null);
-                  setReload((value) => value + 1);
-                }}
-              >
-                Current · {duration(plan.currentHours)}
-              </Button>
-              <div>
-                <strong>Longest · {duration(plan.longestHours)}</strong>
-              </div>
+            <div
+              className="smart-runtime-presets"
+              role="group"
+              aria-label="Runtime presets"
+            >
+              {[4, 12, 24].map((hours) => (
+                <Button
+                  key={hours}
+                  variant="secondary"
+                  disabled={busy || offline || span <= 0 || pending}
+                  onClick={() => {
+                    const watts = Math.max(
+                      plan.minimumWatts,
+                      Math.min(
+                        plan.allOnWatts,
+                        (plan.battery.storedEnergyKwh * 1000) / hours,
+                      ),
+                    );
+                    if (watts === target) return;
+                    setLoading(true);
+                    setApplyError("");
+                    setTarget(watts);
+                  }}
+                >
+                  {hours}h
+                </Button>
+              ))}
             </div>
             <div className="smart-plan-result" aria-live="polite">
               {reviewing ? (
