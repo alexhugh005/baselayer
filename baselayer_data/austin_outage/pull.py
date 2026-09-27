@@ -21,6 +21,7 @@ LOAD = "np6-345-cd"
 FORECAST = "np3-565-cd"
 OUTAGE_CAP = "np3-233-cd"
 LAMBDA = "np6-322-cd"
+SPP = "np6-905-cd"
 # The day-ahead load forecast: latest posting at or before 10:00 the day before.
 FORECAST_CUTOFF = dt.time(10, 0)
 
@@ -166,6 +167,39 @@ def pull_prices(raw, days, settlement_point="LZ_AEN"):
             continue
         _log(f"RTM prices: downloading {year}")
         _write(rtm_prices(year, available[year], settlement_point), path)
+
+
+# NP6-905-CD archive columns -> the RTM workbook columns features.price_hourly reads.
+SPP_COLUMNS = {
+    "DeliveryDate": "Delivery Date",
+    "DeliveryHour": "Delivery Hour",
+    "DeliveryInterval": "Delivery Interval",
+    "DSTFlag": "Repeated Hour Flag",
+    "SettlementPointName": "Settlement Point Name",
+    "SettlementPointType": "Settlement Point Type",
+    "SettlementPointPrice": "Settlement Point Price",
+}
+
+
+def pull_recent_prices(api, raw, days, settlement_point="LZ_AEN"):
+    """15-minute real-time prices from the NP6-905-CD archive, one file per interval.
+
+    The yearly workbooks pull_prices reads lag by weeks, so serving uses this
+    for the last few days. Writes raw/spp/recent.parq in the workbook schema.
+    """
+    path = raw / "spp" / "recent.parq"
+    if path.exists():
+        return
+    start = dt.datetime.combine(days[0], dt.time())
+    # The day's last interval posts a few minutes after midnight.
+    end = dt.datetime.combine(days[-1] + dt.timedelta(days=1), dt.time(1, 0))
+    records = list_archive(api, SPP, start, end)
+    _log(f"{SPP}: downloading {len(records)} files")
+    frames = bulk_download(api, SPP, [r["doc_id"] for r in records])
+    df = pd.concat(frames.values(), ignore_index=True).rename(columns=SPP_COLUMNS)
+    df = df[df["Settlement Point Name"].eq(settlement_point)]
+    dates = pd.to_datetime(df["Delivery Date"], format="%m/%d/%Y").dt.date
+    _write(df[dates.isin(set(days))][list(SPP_COLUMNS.values())].reset_index(drop=True), path)
 
 
 STEPS = {

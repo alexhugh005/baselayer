@@ -1,0 +1,11 @@
+# Model API runtime (Linux image). Model libraries match the training run
+# (run_config.json: xgboost 3.4.1) and the repo's pinned requirements.txt.
+# xgboost-cpu is the same `xgboost` module without the CUDA build (5 MB vs 55 MB);
+# on macOS, install `xgboost` from requirements.txt instead.
+fastapi==0.141.1
+uvicorn[standard]==0.54.0
+numpy==2.5.3
+pandas==3.0.6
+pyarrow==25.0.1
+scikit-learn==1.9.1
+xgboost-cpu==3.4.1

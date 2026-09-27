@@ -54,6 +54,20 @@ services:
       retries: 12
       start_period: 30s
 
+  model:
+    build:
+      context: .
+      dockerfile: baselayer_model/api/Dockerfile
+    restart: unless-stopped
+    # ERCOT Public API credentials (see baselayer_data/ercot/README.md).
+    env_file:
+      - path: baselayer_data/ercot/.env
+        required: false
+    ports:
+      - "127.0.0.1:${MODEL_PORT:-8000}:8000"
+    volumes:
+      - model-data:/data
+
   homeassistant:
     extends:
       file: compose.energy-lab.yaml
@@ -66,6 +80,7 @@ services:
 
 volumes:
   app-data:
+  model-data:
   homeassistant:
   panel-config:
   panel-certs:

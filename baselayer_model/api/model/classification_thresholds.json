@@ -1,0 +1,32 @@
+{
+  "classes": [
+    "low",
+    "medium",
+    "high"
+  ],
+  "unit": "operating_day",
+  "hourly_aggregation": "mean of hourly class probabilities over the operating day",
+  "decision_rule": [
+    "high if p_high >= thresholds.high",
+    "medium if p_medium + p_high >= thresholds.medium",
+    "low otherwise (equivalently p_low > thresholds.low)"
+  ],
+  "thresholds": {
+    "low": 0.426848,
+    "medium": 0.573152,
+    "high": 0.377967
+  },
+  "tuning": {
+    "high": {
+      "score": "p_high",
+      "objective": "F2",
+      "oof_value": 0.6061
+    },
+    "medium": {
+      "score": "p_elevated",
+      "objective": "F1",
+      "oof_value": 0.4638
+    }
+  },
+  "tuned_on": "leave-one-event-out out-of-fold predictions (test split excluded)"
+}
