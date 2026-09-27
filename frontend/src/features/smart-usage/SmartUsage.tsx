@@ -451,33 +451,11 @@ export function UsagePlanner({
             </section>
           )}
           <p className="muted smart-estimate-note">
-            Estimates assume constant measured load, no charging, and all
-            reported stored energy usable. Actual runtime can change.{" "}
+            Estimates assume steady power use, no charging, and all stored energy
+            available. Runtime may vary.{" "}
             {plan.battery.isSimulated &&
-              "Battery telemetry is simulated and its configured discharge rate is independent of these device changes."}{" "}
-            Times use your browser’s local time zone. A zero measured load has
-            no finite estimated end; battery standby losses are not modeled.
+              "Simulated battery drain stays the same when devices change."}
           </p>
-          {plan.excludedDevices.length > 0 && (
-            <details className="card smart-excluded">
-              <summary>
-                {plan.excludedDevices.length} devices outside this estimate’s
-                adjustable range
-              </summary>
-              <p>
-                These loads stay in current household usage. A complete
-                all-on/all-off range needs usable power estimates and switching
-                permissions.
-              </p>
-              <ul>
-                {plan.excludedDevices.map((device) => (
-                  <li key={device.entityId}>
-                    <strong>{device.name}</strong> — {device.reason}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
         </>
       )}
     </>
