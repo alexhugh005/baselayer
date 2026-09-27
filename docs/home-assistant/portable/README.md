@@ -1,5 +1,9 @@
 # Portable Energy Lab
 
+To start Base Layer's frontend and API as well, use the repository root's
+[`docker compose up` setup](../../../README.md#start-everything-with-docker).
+The commands below run only the standalone Home Assistant/PanelBench lab.
+
 Start the virtual household and SPAN simulator together. Docker Engine with
 Compose v2, or Docker Desktop, and internet access for the first build are required.
 The build pins Home Assistant 2026.9.3, SPAN integration 2.1.2 and PanelBench 2.5.3.

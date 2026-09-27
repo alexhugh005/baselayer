@@ -15,7 +15,7 @@ input_number:
   heater_watts:
     name: Space heater rated power
     min: 750
-    max: 1500
+    max: 3000
     step: 750
     initial: 1500
     unit_of_measurement: W

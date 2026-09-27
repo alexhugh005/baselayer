@@ -267,12 +267,6 @@ template:
     device_class: power
     state: '{{ states(''sensor.virtual_household_power'') | float(99999) }}'
     availability: '{{ is_number(states(''sensor.virtual_household_power'')) }}'
-  - name: Lab SPAN Backup Available Power
-    unique_id: lab_span_backup_available_power
-    unit_of_measurement: W
-    device_class: power
-    state: '{{ [0, 11000 - states(''sensor.lab_span_backup_reserved_power'') | float(0)]
-      | max }}'
   - name: Lab SPAN Effective EV Current
     unique_id: lab_span_effective_ev_current
     unit_of_measurement: A
@@ -828,7 +822,7 @@ automation:
   actions:
   - action: homeassistant.save_persistent_states
 - id: lab_span_backup_native_living_room
-  alias: Backup budget for living_room
+  alias: Backup supply for living_room
   mode: queued
   triggers:
   - trigger: state
@@ -857,7 +851,7 @@ automation:
         data:
           circuit: living_room
 - id: lab_span_backup_native_office
-  alias: Backup budget for office
+  alias: Backup supply for office
   mode: queued
   triggers:
   - trigger: state
@@ -886,7 +880,7 @@ automation:
         data:
           circuit: office
 - id: lab_span_backup_native_kitchen
-  alias: Backup budget for kitchen
+  alias: Backup supply for kitchen
   mode: queued
   triggers:
   - trigger: state
@@ -915,7 +909,7 @@ automation:
         data:
           circuit: kitchen
 - id: lab_span_backup_native_essentials
-  alias: Backup budget for essentials
+  alias: Backup supply for essentials
   mode: queued
   triggers:
   - trigger: state
@@ -944,7 +938,7 @@ automation:
         data:
           circuit: essentials
 - id: lab_span_backup_native_laundry
-  alias: Backup budget for laundry
+  alias: Backup supply for laundry
   mode: queued
   triggers:
   - trigger: state
@@ -973,7 +967,7 @@ automation:
         data:
           circuit: laundry
 - id: lab_span_backup_native_garage
-  alias: Backup budget for garage
+  alias: Backup supply for garage
   mode: queued
   triggers:
   - trigger: state
@@ -1002,7 +996,7 @@ automation:
         data:
           circuit: garage
 - id: lab_span_backup_native_hvac
-  alias: Backup budget for hvac
+  alias: Backup supply for hvac
   mode: queued
   triggers:
   - trigger: state
@@ -1031,7 +1025,7 @@ automation:
         data:
           circuit: hvac
 - id: lab_span_backup_native_water_heater
-  alias: Backup budget for water_heater
+  alias: Backup supply for water_heater
   mode: queued
   triggers:
   - trigger: state
@@ -1161,49 +1155,6 @@ automation:
       - input_boolean.lab_span_backup_hvac
       - input_boolean.lab_span_backup_water_heater
   - action: homeassistant.save_persistent_states
-- id: lab_span_backup_overload
-  alias: Backup measured overload disconnect
-  mode: single
-  triggers:
-  - trigger: numeric_state
-    entity_id: sensor.virtual_household_power
-    above: 11000
-  conditions:
-  - condition: state
-    entity_id: input_boolean.lab_span_grid_outage
-    state: 'on'
-  actions:
-  - action: input_boolean.turn_off
-    target:
-      entity_id:
-      - input_boolean.lab_span_backup_living_room
-      - input_boolean.lab_span_backup_office
-      - input_boolean.lab_span_backup_kitchen
-      - input_boolean.lab_span_backup_essentials
-      - input_boolean.lab_span_backup_laundry
-      - input_boolean.lab_span_backup_garage
-      - input_boolean.lab_span_backup_hvac
-      - input_boolean.lab_span_backup_water_heater
-  - action: persistent_notification.create
-    data:
-      title: Backup overload stopped
-      message: Measured load exceeded the 11 kW operating budget. Circuits were disconnected;
-        restore a smaller selection.
-      notification_id: lab_span_backup_budget
-  - delay:
-      seconds: 2.5
-  - action: script.lab_span_command_relays
-    data:
-      entities:
-      - switch.span_panel_living_room_breaker
-      - switch.span_panel_office_outlets_breaker
-      - switch.span_panel_kitchen_outlets_breaker
-      - switch.span_panel_essential_electronics_breaker
-      - switch.span_panel_laundry_dryer_breaker
-      - switch.span_panel_garage_ev_charger_breaker
-      - switch.span_panel_central_hvac_breaker
-      - switch.span_panel_water_heater_breaker
-      target_state: 'off'
 script:
   lab_span_restore_supply:
     alias: Restore all circuit supplies (loads stay off)
@@ -1298,7 +1249,7 @@ script:
           entities: switch.span_panel_water_heater_breaker
           target_state: 'on'
   lab_span_backup_restore:
-    alias: Restore circuit within battery budget
+    alias: Restore circuit on battery
     mode: queued
     max: 20
     fields:
@@ -1317,15 +1268,6 @@ script:
             - water_heater
     sequence:
     - variables:
-        peaks:
-          living_room: 73
-          office: 1516
-          kitchen: 2553
-          essentials: 500
-          laundry: 5001
-          garage: 5760
-          hvac: 3008
-          water_heater: 4502
         relays:
           living_room: switch.span_panel_living_room_breaker
           office: switch.span_panel_office_outlets_breaker
@@ -1336,7 +1278,7 @@ script:
           hvac: switch.span_panel_central_hvac_breaker
           water_heater: switch.span_panel_water_heater_breaker
     - condition: template
-      value_template: '{{ circuit in peaks }}'
+      value_template: '{{ circuit in relays }}'
     - condition: state
       entity_id: input_boolean.lab_span_grid_outage
       state: 'on'
@@ -1350,16 +1292,13 @@ script:
           value_template: '{{ not is_state(''binary_sensor.lab_span_backup_ready'',
             ''on'') or is_state(''input_boolean.lab_span_main_outage'', ''on'') or
             not is_state(''input_boolean.lab_span_'' ~ circuit ~ ''_fault'', ''off'')
-            or ((states(''sensor.virtual_household_power'') | float(99999)) + (0 if
-            is_state(''input_boolean.lab_span_backup_'' ~ circuit, ''on'') else peaks[circuit]))
-            > 11000 }}'
+            }}'
         then:
         - action: persistent_notification.create
           data:
             title: Battery circuit restore blocked
-            message: '{{ circuit ~ '': measured load plus the startup estimate exceeds
-              capacity, battery unavailable, or an active fault. Reduce load and try
-              again. Budget: 11,000 W; EV capped at 24 A.'' }}'
+            message: '{{ circuit ~ '': battery unavailable or an active supply fault.
+              Restore supply and try again.'' }}'
             notification_id: lab_span_backup_budget
         - delay:
             seconds: 2.5
@@ -1367,7 +1306,7 @@ script:
           data:
             entities: '{{ relays[circuit] }}'
             target_state: 'off'
-        - stop: Backup capacity or supply unavailable
+        - stop: Backup supply unavailable
       - action: input_boolean.turn_on
         target:
           entity_id: '{{ ''input_boolean.lab_span_backup_'' ~ circuit }}'

@@ -7,9 +7,9 @@ import yaml
 # EV power is capped at 24 A in battery mode in the original meter expression.
 PEAKS = dict(living_room=73, office=1516, kitchen=2553, essentials=500,
              laundry=5001, garage=5760, hvac=3008, water_heater=4502)
-BUDGET = 10500
 OUTAGE = 'input_boolean.lab_span_grid_outage'
 READY = 'binary_sensor.lab_span_backup_ready'
+# Keep this entity ID for existing dashboards; its value is now measured load.
 RESERVED = 'sensor.lab_span_backup_reserved_power'
 
 
@@ -27,13 +27,19 @@ def install_backup(lab, relays):
         path.write_text(yaml.safe_dump(value, sort_keys=False, allow_unicode=True))
     path = lab / 'packages/span_panel.yaml'
     package = yaml.safe_load(path.read_text())
+    # Publish the model's known circuit peaks for API outage admission. Live watts
+    # can be only standby demand and would underestimate the next appliance cycle.
+    customize = package.setdefault('homeassistant', {}).setdefault('customize', {})
+    circuit_model = json.loads((Path(__file__).parent / 'circuits.json').read_text())
+    for key, relay in relays.items():
+        meter = relay.replace('switch.', 'sensor.').removesuffix('_breaker') + '_power'
+        customize.setdefault(meter, {})['restoration_estimate_watts'] = PEAKS[key]
+        customize[meter]['restoration_devices'] = circuit_model[key]['devices']
+        customize[meter]['circuit_supply_entity'] = f'binary_sensor.lab_span_{key}_supply'
     flags = [admitted(key) for key in PEAKS]
-    priorities = {k: v.replace('switch.', 'select.').replace('_breaker', '_circuit_priority') for k,v in relays.items()}
     package['input_boolean']['lab_span_grid_outage'] = {'name': 'Grid outage · battery backup', 'icon': 'mdi:transmission-tower-off'}
-    package['input_text'] = {}
     for key in PEAKS:
         package['input_boolean'][admitted(key).split('.')[1]] = {'name': f'Backup reservation {key}', 'initial': False}
-        package['input_text'][f'lab_span_saved_priority_{key}'] = {'name': f'Before outage priority {key}', 'max': 40}
     rest = package['rest'][0]
     rest['sensor'] = [
         {'name': 'Lab SPAN Battery Charge', 'unique_id': 'lab_span_battery_charge', 'unit_of_measurement': '%', 'device_class': 'battery',
@@ -45,45 +51,51 @@ def install_backup(lab, relays):
         {'name': 'Lab SPAN Grid Power', 'unique_id': 'lab_span_grid_power', 'unit_of_measurement': 'W', 'device_class': 'power',
          'value_template': '{{ value_json.grid_watts | round(1) }}', 'availability': '{{ value_json.connected }}'}]
     rest['binary_sensor'].append({'name': 'Lab SPAN Backup Ready', 'unique_id': 'lab_span_backup_ready',
-        'value_template': '{{ value_json.connected and value_json.grid_online == false and value_json.battery is not none and value_json.battery.stored_energy_kwh > 0.001 }}'})
-    # Supply is gated before native relay commands finish. Unreserved raw ON commands
+        'value_template': "{{ value_json.connected and value_json.grid_online == false and value_json.battery is not none and value_json.battery.stored_energy_kwh > 0.001 and state_attr('automation.grid_outage_starts_with_all_circuits_off', 'current') == 0 and state_attr('automation.empty_or_disconnected_battery_stops_backup_loads', 'current') == 0 }}"})
+    # Supply is gated before native relay commands finish. Unadmitted raw ON commands
     # cannot power appliances; all restoration passes through the serial queue below.
     for sensor in package['template'][0]['binary_sensor']:
         key = sensor['unique_id'].removeprefix('lab_span_').removesuffix('_supply')
         if key in PEAKS:
-            sensor['state'] = sensor['state'].removesuffix(' }}') + f" and (is_state('{OUTAGE}', 'off') or (is_state('{OUTAGE}', 'on') and is_state('{admitted(key)}', 'on') and is_state('{READY}', 'on') and states('{RESERVED}') | float(99999) <= {BUDGET}))" + ' }}'
-    sum_expr = ' + '.join(f"({watts} if is_state('{admitted(k)}', 'on') else 0)" for k,watts in PEAKS.items())
+            sensor['state'] = sensor['state'].removesuffix(' }}') + f" and (is_state('{OUTAGE}', 'off') or (is_state('{OUTAGE}', 'on') and is_state('{admitted(key)}', 'on') and is_state('{READY}', 'on')))" + ' }}'
+    measured_expr = "states('sensor.virtual_household_power') | float(99999)"
     package['template'][1]['sensor'].extend([
-        {'name': 'Lab SPAN Backup Reserved Power', 'unique_id': 'lab_span_backup_reserved_power', 'unit_of_measurement': 'W', 'device_class': 'power', 'state': '{{ ' + sum_expr + ' }}'},
-        {'name': 'Lab SPAN Backup Available Power', 'unique_id': 'lab_span_backup_available_power', 'unit_of_measurement': 'W', 'device_class': 'power', 'state': '{{ [0, ' + str(BUDGET) + f" - states('{RESERVED}') | float(0)] | max" + ' }}'},
+        {'name': 'Lab SPAN Backup Reserved Power', 'unique_id': 'lab_span_backup_reserved_power', 'unit_of_measurement': 'W', 'device_class': 'power', 'state': '{{ ' + measured_expr + ' }}', 'availability': "{{ is_number(states('sensor.virtual_household_power')) }}"},
         {'name': 'Lab SPAN Effective EV Current', 'unique_id': 'lab_span_effective_ev_current', 'unit_of_measurement': 'A',
          'state': "{% set amps = states('input_number.virtual_ev_current_limit') | float(32) %}{{ [amps, 24] | min if is_state('" + OUTAGE + "', 'on') else amps }}"}])
-    # Use direct helper reads for serialization; a derived sensor can lag the last action.
-    package['script']['lab_span_backup_restore'] = {'alias': 'Restore circuit within battery budget', 'mode': 'queued', 'max': 20,
+    for automation in package['automation']:
+        if automation['id'].endswith('_fault'):
+            branch = automation['actions'][1]['choose'][1]
+            branch['conditions'] = branch['conditions'].removesuffix(' }}') + " and is_state('input_boolean.lab_span_grid_outage', 'off') }}"
+    # Serialize relay restoration and confirm supply; Home Assistant applies no watt budget.
+    package['script']['lab_span_backup_restore'] = {'alias': 'Restore circuit on battery', 'mode': 'queued', 'max': 20,
         'fields': {'circuit': {'required': True, 'selector': {'select': {'options': list(PEAKS)}}}},
         'sequence': [
-            {'variables': {'peaks': PEAKS, 'relays': relays, 'priorities': priorities}},
-            {'condition': 'template', 'value_template': '{{ circuit in peaks }}'},
+            {'variables': {'relays': relays}},
+            {'condition': 'template', 'value_template': '{{ circuit in relays }}'},
+            {'condition': 'state', 'entity_id': OUTAGE, 'state': 'on'},
             {'if': [{'condition': 'template', 'value_template': "{{ is_state('" + OUTAGE + "', 'on') }}"}],
              'then': [
-                {'if': [{'condition': 'template', 'value_template': "{{ not is_state('" + READY + "', 'on') or is_state('input_boolean.lab_span_main_outage', 'on') or not is_state('input_boolean.lab_span_' ~ circuit ~ '_fault', 'off') or ((" + sum_expr + ") + (0 if is_state('input_boolean.lab_span_backup_' ~ circuit, 'on') else peaks[circuit])) > " + str(BUDGET) + ' }}'}],
-                 'then': [action('persistent_notification.create', title='Battery circuit restore blocked', message="{{ circuit ~ ': insufficient reserved capacity, battery unavailable, or an active fault. Turn another circuit off and try again. Budget: 10,500 W; EV capped at 24 A.' }}", notification_id='lab_span_backup_budget'),
-                          action('switch.turn_off', '{{ relays[circuit] }}'), {'stop': 'Backup capacity or supply unavailable'}]},
-                action('input_boolean.turn_on', "{{ 'input_boolean.lab_span_backup_' ~ circuit }}"),
-                action('select.select_option', '{{ priorities[circuit] }}', option='never') ]},
+                {'if': [{'condition': 'template', 'value_template': "{{ not is_state('" + READY + "', 'on') or is_state('input_boolean.lab_span_main_outage', 'on') or not is_state('input_boolean.lab_span_' ~ circuit ~ '_fault', 'off') }}"}],
+                 'then': [action('persistent_notification.create', title='Battery circuit restore blocked', message="{{ circuit ~ ': battery unavailable or an active supply fault. Restore supply and try again.' }}", notification_id='lab_span_backup_budget'),
+                          {'delay': {'seconds': 2.5}}, action('switch.turn_off', '{{ relays[circuit] }}'), {'stop': 'Backup supply unavailable'}]},
+                action('input_boolean.turn_on', "{{ 'input_boolean.lab_span_backup_' ~ circuit }}") ]},
             {'delay': {'seconds': 2.5}},
+            {'condition': 'state', 'entity_id': OUTAGE, 'state': 'on'},
             {'if': [{'condition': 'template', 'value_template': "{{ not is_state(relays[circuit], 'on') }}"}],
              'then': [action('switch.turn_on', '{{ relays[circuit] }}')]},
             {'delay': {'seconds': 3}},
             {'if': [{'condition': 'template', 'value_template': "{{ not is_state(relays[circuit], 'on') }}"}],
              'then': [action('input_boolean.turn_off', "{{ 'input_boolean.lab_span_backup_' ~ circuit }}"),
-                      action('persistent_notification.create', title='Circuit did not restore', message='The panel did not confirm closure. Try Restore on battery again.', notification_id='lab_span_backup_budget')]}]}
+                      action('persistent_notification.create', title='Circuit did not restore', message='The panel did not confirm closure. Try Restore on battery again.', notification_id='lab_span_backup_budget'), {'stop': 'Panel did not confirm closure'}]},
+            # Demo only: real installations need longer startup and meter-settling delays.
+            {'delay': {'seconds': 5}}]}
     for key in PEAKS:
         package['script'][f'lab_span_backup_restore_{key}'] = {'alias': f'Restore {key.replace("_", " ")} on battery',
             'sequence': [action('script.lab_span_backup_restore', circuit=key)]}
-        # Turning off a circuit releases its peak allowance. Raw SPAN ON commands
-        # request the same budget check as the explicit restore button.
-        package['automation'].append({'id': f'lab_span_backup_native_{key}', 'alias': f'Backup budget for {key}', 'mode': 'queued',
+        # Turning off a circuit releases its admission flag. Raw SPAN ON commands
+        # request the same supply check as the explicit restore button.
+        package['automation'].append({'id': f'lab_span_backup_native_{key}', 'alias': f'Backup supply for {key}', 'mode': 'queued',
             'triggers': [{'trigger': 'state', 'entity_id': relays[key], 'to': 'off', 'id': 'off'}, {'trigger': 'state', 'entity_id': relays[key], 'to': 'on', 'id': 'on'}],
             'conditions': [{'condition': 'state', 'entity_id': OUTAGE, 'state': 'on'}],
             'actions': [{'choose': [
@@ -91,10 +103,8 @@ def install_backup(lab, relays):
                 {'conditions': "{{ trigger.id == 'on' and not is_state('" + admitted(key) + "', 'on') }}", 'sequence': [action('script.lab_span_backup_restore', circuit=key)]}]}]})
     entry = [action('input_boolean.turn_off', flags), {'delay': {'seconds': 2.5}},
              action('switch.turn_off', list(relays.values()))]
-    for key in PEAKS:
-        entry.extend([
-            {'if': [{'condition': 'template', 'value_template': "{{ trigger.id == 'begin' }}"}], 'then': [action('input_text.set_value', f'input_text.lab_span_saved_priority_{key}', value="{{ states('" + priorities[key] + "') }}")]},
-            action('select.select_option', priorities[key], option='off_grid')])
+    # Circuit priorities are user preferences. Outage start, rollout, and grid
+    # return operate relays only; never rewrite "When grid goes down" settings.
     entry.append(action('homeassistant.save_persistent_states'))
     package['automation'].append({'id': 'lab_span_backup_begin', 'alias': 'Grid outage starts with all circuits off', 'mode': 'restart',
         'triggers': [{'trigger': 'state', 'entity_id': OUTAGE, 'from': 'off', 'to': 'on', 'id': 'begin'}, {'trigger': 'homeassistant', 'event': 'start', 'id': 'restart'}],
@@ -103,12 +113,34 @@ def install_backup(lab, relays):
         'triggers': [{'trigger': 'state', 'entity_id': READY, 'from': 'on', 'to': 'off'}],
         'conditions': [{'condition': 'state', 'entity_id': OUTAGE, 'state': 'on'}],
         'actions': [action('input_boolean.turn_off', flags), {'delay': {'seconds': 2.5}}, action('switch.turn_off', list(relays.values()))]})
-    package['automation'].append({'id': 'lab_span_backup_end', 'alias': 'Grid restored keeps circuits off until manual restore', 'mode': 'restart',
+    package['automation'].append({'id': 'lab_span_backup_end', 'alias': 'Grid restored preserves circuit states', 'mode': 'restart',
         'triggers': [{'trigger': 'state', 'entity_id': OUTAGE, 'from': 'on', 'to': 'off'}],
-        'actions': [action('input_boolean.turn_off', flags), {'delay': {'seconds': 2.5}}, action('switch.turn_off', list(relays.values())),
-            *[action('select.select_option', priorities[k], option="{% set p = states('input_text.lab_span_saved_priority_" + k + "') %}{{ p if p in ['never','off_grid','soc_threshold'] else 'off_grid' }}") for k in PEAKS], action('homeassistant.save_persistent_states')]})
-    # Existing restore-all is explicitly grid-only, so it cannot bypass reservations.
+        # Grid return removes backup admission only; leave relay positions alone.
+        'actions': [action('input_boolean.turn_off', flags), action('homeassistant.save_persistent_states')]})
+    # Existing restore-all is explicitly grid-only, so it cannot bypass battery admission.
     package['script']['lab_span_restore_supply']['sequence'].insert(0, {'condition': 'state', 'entity_id': OUTAGE, 'state': 'off'})
+    # Serialize native commands and retry the integration's relay debounce. Fault
+    # recovery, grid transitions, and manual restores can otherwise race each other.
+    def queue_relays(value):
+        if isinstance(value, list):
+            return [queue_relays(v) for v in value]
+        if isinstance(value, dict):
+            if value.get('action') in ('switch.turn_on', 'switch.turn_off'):
+                return action('script.lab_span_command_relays', entities=value['target']['entity_id'],
+                              target_state='on' if value['action'].endswith('turn_on') else 'off')
+            return {k: queue_relays(v) for k,v in value.items()}
+        return value
+    package = queue_relays(package)
+    package['script']['lab_span_command_relays'] = {'alias': 'Confirm virtual SPAN relay commands', 'mode': 'queued', 'max': 50,
+        'sequence': [
+            {'repeat': {'count': 3, 'sequence': [
+                {'variables': {'pending': "{{ expand(entities) | rejectattr('state', 'eq', target_state) | map(attribute='entity_id') | list }}"}},
+                {'if': [{'condition': 'template', 'value_template': '{{ pending | length > 0 }}'}], 'then': [
+                    {'delay': {'seconds': 2.5}},
+                    {'action': "{{ 'switch.turn_' ~ target_state }}", 'target': {'entity_id': '{{ pending }}'}, 'continue_on_error': True},
+                    {'delay': {'seconds': 1}}]}]}},
+            {'if': [{'condition': 'template', 'value_template': "{{ expand(entities) | rejectattr('state', 'eq', target_state) | list | length > 0 }}"}],
+             'then': [action('persistent_notification.create', title='Panel command not confirmed', message='A virtual circuit did not reach its requested state. Check the panel connection and retry.', notification_id='lab_span_relay_error')]}]}
     save(path, package)
     evpath = lab / 'packages/virtual_ev_charger.yaml'
     ev = yaml.safe_load(evpath.read_text())
@@ -120,13 +152,22 @@ def install_backup(lab, relays):
     dashpath = lab / 'dashboard.yaml'
     dashboard = yaml.safe_load(dashpath.read_text())
     view = next(v for v in dashboard['views'] if v.get('path') == 'panel')
-    view['cards'].insert(0, {'type': 'markdown', 'content': '# Battery backup outage\n1. Turn on **Grid outage · battery backup**. All circuits start off.\n2. Use **Restore on battery** on the circuits you want; then start their appliances.\n3. Turn a **SPAN breaker** off to free its reserved capacity.\n4. Turn the grid outage off, wait 5 seconds, then run **Restore all circuit supplies** and **Reset realistic household**.\n\nThe simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Restores reserve the circuit’s maximum modeled load within **10.5 kW**, leaving 500 W headroom. EV charging is capped at **24 A / 5.76 kW** on backup. A blocked restore appears in Notifications. The old whole-house fault cuts all power, including backup; leave it off.'})
-    view['cards'].insert(1, {'type': 'entities', 'title': 'Battery backup controls', 'show_header_toggle': False, 'entities': [OUTAGE, READY,
-        'sensor.lab_span_battery_charge', 'sensor.lab_span_battery_energy', 'sensor.lab_span_battery_power', 'sensor.lab_span_grid_power',
-        'sensor.virtual_household_power', RESERVED, 'sensor.lab_span_backup_available_power', 'sensor.lab_span_effective_ev_current']})
+    view['cards'].insert(0, {'type': 'markdown', 'content': '# Battery backup outage\n1. Turn on **Grid outage · battery backup**. All circuits start off. Wait for **Backup ready: On**.\n2. Click **Run** beside **Restore** on the circuits you want; then start their appliances.\n3. After each restore, wait five seconds for relay confirmation.\n4. Turn the grid outage off and wait for grid recovery. Existing breaker positions are kept. Use **Restore all circuit supplies** if you want every breaker on, and **Reset realistic household** to reset appliances.\n\nThe simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Home Assistant does not reject circuit restores or disconnect circuits based on a watt limit. Base Layer manages its own power budget. EV charging is capped at **24 A / 5.76 kW** on backup. A blocked restore appears in Notifications. The old whole-house fault cuts all power, including backup; leave it off.'})
+    view['cards'].insert(1, {'type': 'entities', 'title': 'Battery backup controls', 'show_header_toggle': False, 'entities': [OUTAGE,
+        *[{'entity': entity, 'name': name} for entity, name in [
+            (READY, 'Backup ready'), ('sensor.lab_span_battery_charge', 'Battery charge'),
+            ('sensor.lab_span_battery_energy', 'Stored battery energy'), ('sensor.lab_span_battery_power', 'Battery output'),
+            ('sensor.lab_span_grid_power', 'Grid import'), ('sensor.virtual_household_power', 'Household load'),
+            (RESERVED, 'Measured backup load'),
+            ('sensor.lab_span_effective_ev_current', 'Effective EV charging current')]]]})
+    for card in view['cards']:
+        for entity in card.get('entities', []):
+            if isinstance(entity, dict) and entity.get('entity') == 'sensor.span_panel_current_power':
+                entity.update(entity='sensor.span_panel_site_power', name='SPAN household load')
     for key, relay in relays.items():
         for card in view['cards']:
             entities = card.get('entities', [])
             if any(isinstance(e, dict) and e.get('entity') == relay for e in entities):
-                entities.insert(0, {'entity': f'script.lab_span_backup_restore_{key}', 'name': f'Restore on battery · reserves {PEAKS[key]:,} W'})
+                entities.insert(0, {'entity': f'script.lab_span_backup_restore_{key}', 'name': f'Restore · {PEAKS[key]:,} W'})
+    view['cards'][0], view['cards'][1] = view['cards'][1], view['cards'][0]
     save(dashpath, dashboard)

@@ -210,8 +210,6 @@ views:
       name: Household load
     - entity: sensor.lab_span_backup_reserved_power
       name: Measured backup load
-    - entity: sensor.lab_span_backup_available_power
-      name: Remaining backup budget
     - entity: sensor.lab_span_effective_ev_current
       name: Effective EV charging current
   - type: markdown
@@ -223,20 +221,18 @@ views:
       2. Click **Run** beside **Restore** on the circuits you want; then start their
       appliances.
 
-      3. After each restore, wait five seconds for load to settle. Idle circuits leave
-      capacity for more restores.
+      3. After each restore, wait five seconds for relay confirmation.
 
       4. Turn the grid outage off and wait for grid recovery. Existing breaker positions
       are kept. Use **Restore all circuit supplies** if you want every breaker on,
       and **Reset realistic household** to reset appliances.
 
 
-      The simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Each restore
-      checks measured load plus the next circuit’s estimate against **11 kW**. After
-      the cooldown, only actual usage counts. Later appliance starts can still trigger
-      the measured-overload disconnect. EV charging is capped at **24 A / 5.76 kW**
-      on backup. A blocked restore appears in Notifications. The old whole-house fault
-      cuts all power, including backup; leave it off.'
+      The simulated battery is 13.5 kWh, initially 80%, with 11 kW output. Home Assistant
+      does not reject circuit restores or disconnect circuits based on a watt limit.
+      Base Layer manages its own power budget. EV charging is capped at **24 A / 5.76
+      kW** on backup. A blocked restore appears in Notifications. The old whole-house
+      fault cuts all power, including backup; leave it off.'
   - type: markdown
     content: '# Virtual SPAN smart panel
 

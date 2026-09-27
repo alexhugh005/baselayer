@@ -17,7 +17,7 @@ the circuit supply interlocks to enable these virtual appliances.
 
 | Load | Behavior |
 | --- | --- |
-| Space heater | 750 or 1,500 W; separate target temperature and ±0.5°F hysteresis; 0.5 W electronics standby. |
+| Space heater | 750–3,000 W in 750 W steps (default 1,500 W; extended range for anomaly testing); separate target temperature and ±0.5°F hysteresis; 0.5 W electronics standby. |
 | Electric dryer | 45 minutes of active run time. First 40 minutes alternate 4 minutes at 5,000 W with 2 minutes at 300 W; last 5 minutes cool down at 300 W. Finishes automatically; 1 W standby. |
 | Desk lamp | LED, default 12 W, configurable 4–15 W rating; 0 W at its mechanical switch. |
 | Living-room LED | Up to 12 W; illustrative nonlinear dimming curve and 0.4 W smart-control standby. |

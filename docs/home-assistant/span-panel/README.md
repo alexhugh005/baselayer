@@ -1,5 +1,14 @@
 # Virtual SPAN panel for Energy Lab
 
+With the updated Base Layer API running, the battery-outage toggle also triggers
+[automatic circuit recovery](../../outage-recovery.md): previously-on circuits are
+restored smallest estimated load first, with at least five seconds between steps
+and an 11 kW measured-load budget. The API waits for the lab's Backup ready signal.
+Native circuit meters expose the model's peak estimates for this admission check.
+They also expose explicit device membership and supply confirmation. The API
+restarts mapped devices that were running before the outage after their circuit
+is powered, preserving thermostat mode and leaving previously-off devices off.
+
 Local Home Assistant: <http://localhost:8123/energy-lab/panel>  
 PanelBench: <http://localhost:18080>
 
@@ -225,8 +234,90 @@ priority does not send a breaker on/off command or change appliance permissions.
 Verified with the local virtual panel: the UI's **Stay on** selection produced
 `never` in Home Assistant and a confirmed command in Base Layer. The original
 `off_grid` priority was restored afterward. This verifies configuration delivery;
-the lab's whole-house fault scenario still deliberately cuts all circuit supplies
-and is not a simulation of SPAN battery-backed islanding.
+the lab's original whole-house fault scenario deliberately cuts all circuit supplies.
+Use the separate **Grid outage · battery backup** scenario below to test islanding.
 
 References: [SPAN integration](https://github.com/SpanPanel/span) and
 [Home Assistant select service](https://www.home-assistant.io/integrations/select).
+
+## Battery-backed utility outage
+
+Open [Smart Panel](http://localhost:8123/energy-lab/panel). The **Battery backup
+controls** card is the new scenario control:
+
+1. Leave **Whole-house power outage** and all area faults off.
+2. Turn on **Grid outage · battery backup**. Wait for **Backup Ready** to turn on
+   and the eight breakers to open. This disconnects the simulated utility grid;
+   the native PanelBench battery is the remaining source.
+3. Click **Run** beside **Restore · [watts] W** on a circuit, then turn its
+   appliances on. Restoring supply does not start appliances. Ordinary SPAN ON
+   commands also request the same admission check.
+4. Watch **Battery Power**, **Battery Energy**, and **Virtual Household Power**.
+   Grid power remains zero. Battery output follows the appliance meters up to
+   the simulator’s own 11 kW discharge rating; HA does not shed excess demand.
+   Native battery efficiency is 95%, so stored energy decreases slightly faster
+   than energy delivered to loads.
+5. Wait for each restore to finish confirming the relay.
+   A refused restore appears in Home Assistant Notifications.
+6. To finish, turn **Grid outage · battery backup** off. Wait until the grid
+   transition finishes; existing breaker positions stay unchanged. Run **Restore all
+   circuit supplies** if you want every breaker on. Use **Reset
+   realistic household** on Virtual Devices to restart the usual quiet-home loads.
+
+Home Assistant allows circuit restores regardless of measured load or circuit
+estimates. It no longer applies an 11 kW admission check or disconnects the
+whole house for exceeding that wattage. Base Layer still applies its own 11 kW
+power-management policy. EV charging retains its separate 5,760 W backup cap.
+**Effective EV Current** shows the cap in effect. Normal charging limits resume
+on grid power.
+
+The native simulated battery has 13.5 kWh capacity, starts at 10.8 kWh (80%), and
+has 11 kW maximum discharge output. It uses backup-only dispatch. A simulator
+restart resets battery charge to its configured starting value; an HA restart
+retains the grid-outage selection but clears circuit admission flags and requires manual
+restoration. No energy is simulated while the containers are stopped.
+
+Home Assistant checks battery availability and circuit faults when restoring
+supply, without a watt budget. The restore queue waits for closure and a
+five-second demo cooldown before the next request. The existing
+`sensor.lab_span_backup_reserved_power` entity now reports measured load and is labeled **Measured backup load**. The garage
+has a 24 A cap while islanded. Bridge loss or an empty battery still removes
+supply. Internal diagnostic helpers are not user controls.
+
+The original whole-house fault removes *all* supply, including battery backup.
+Do not use it to start this scenario. Restore-all is disabled during a grid outage.
+The backup scenario preserves each circuit's **When grid goes down** setting.
+Neither outage entry, circuit restoration, nor grid return writes circuit
+priorities. The panel can refuse or shed a circuit according to its existing
+setting; the rollout does not force that setting to **Stay on**.
+
+The local Base Layer configuration opts into `Battery:PanelBench:Enabled` and
+reads this same battery through the local health endpoint. Its Home Assistant
+origin must match `Battery:PanelBench:HomeAssistantOrigin`. Disconnection reports
+unavailable instead of silently switching back to the constant-load battery demo.
+
+Generate with `build_lab.py --entities relays.json` (using the appropriate paths),
+install the generated HA packages and dashboard, validate configuration, and
+restart HA and PanelBench. `backup_lab.py` contains the scenario generator.
+
+Live acceptance test:
+
+```sh
+.local/span-tools/bin/python docs/home-assistant/span-panel/verify_backup.py
+```
+
+It deliberately operates only the named illustrative lab and returns it to grid
+power and the quiet-household scenario afterward.
+
+Verified September 26, 2026: startup opens all eight circuits; raw breaker restores operate through the same supply checks; concurrent
+restores are serialized;
+battery energy falls with a live 5 kW load while grid import is zero; the updated
+verifier checks that loads above 11 kW stay powered; whole-house faults
+still cut all supply; and grid recovery restores the quiet-home scenario.
+Battery API tests passed (33 cases). A final readiness check also confirmed
+restoration waits for outage initialization and disconnect shutdown to finish.
+
+The bridge sends an acknowledged heartbeat through its MQTT transport every two
+seconds. Native meter telemetry publishes changes only; a fully dark house must
+remain connected even when no meter values change. A 20-second zero-load outage
+check covers this condition. The heartbeat uses a separate lab-owned MQTT topic.
