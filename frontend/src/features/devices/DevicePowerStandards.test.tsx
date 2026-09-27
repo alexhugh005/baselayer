@@ -64,6 +64,50 @@ function setup(value = home) {
   );
   return save;
 }
+it("preselects a detected category and saves its estimated standard", async () => {
+  const save = setup();
+  expect(
+    (screen.getByLabelText("Toaster category") as HTMLSelectElement).value,
+  ).toBe("toaster");
+  expect(screen.getByText(/Auto-detected category/)).toBeTruthy();
+  fireEvent.click(screen.getByText("Save settings"));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(
+      "home",
+      expect.objectContaining({
+        devicePowerStandards: {
+          "switch.toaster": { category: "toaster", standardWatts: null },
+        },
+      }),
+    ),
+  );
+});
+it("preserves saved custom settings and an explicitly unassigned category on reopen", () => {
+  setup({
+    ...home,
+    devices: [
+      { ...home.devices[0], category: "custom", standardWattsOverride: 950 },
+    ],
+  });
+  expect(
+    (screen.getByLabelText("Toaster category") as HTMLSelectElement).value,
+  ).toBe("custom");
+  expect(
+    (screen.getByLabelText("Toaster standard power (W)") as HTMLInputElement)
+      .value,
+  ).toBe("950");
+  expect(screen.queryByText(/Auto-detected category/)).toBeNull();
+  cleanup();
+  setup({
+    ...home,
+    devices: [
+      { ...home.devices[0], category: null, powerStandardConfigured: true },
+    ],
+  });
+  expect(
+    (screen.getByLabelText("Toaster category") as HTMLSelectElement).value,
+  ).toBe("");
+});
 it("uses category estimates, previews the 50% trigger, and saves overrides", async () => {
   const save = setup();
   fireEvent.change(screen.getByLabelText("Toaster category"), {

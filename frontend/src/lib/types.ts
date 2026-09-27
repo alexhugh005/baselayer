@@ -55,6 +55,7 @@ export interface DevicePowerSettings {
   standardWatts: number | null;
 }
 export interface Device {
+  powerStandardConfigured?: boolean;
   category?: string | null;
   standardWatts?: number | null;
   standardWattsOverride?: number | null;

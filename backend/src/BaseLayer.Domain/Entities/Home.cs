@@ -60,6 +60,7 @@ public static class ShutoffLevels
 }
 public sealed class Device
 {
+    public bool PowerStandardConfigured { get; set; }
     public string? Category { get; set; }
     public double? StandardWattsOverride { get; set; }
     public bool StandardPowerAnomalyActive { get; set; }

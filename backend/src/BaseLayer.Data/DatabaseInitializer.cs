@@ -49,6 +49,8 @@ public static class DatabaseInitializer
                 columns.Add(reader.GetString(1));
         if (!columns.Contains("StandardPowerAnomalyActive"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN StandardPowerAnomalyActive INTEGER NOT NULL DEFAULT 0");
+        if (!columns.Contains("PowerStandardConfigured"))
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN PowerStandardConfigured INTEGER NOT NULL DEFAULT 0");
         if (!columns.Contains("Category"))
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Device ADD COLUMN Category TEXT NULL");
         if (!columns.Contains("StandardWattsOverride"))

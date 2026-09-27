@@ -5,6 +5,7 @@ import type { Api } from "../../lib/api";
 import type { Home, ShutoffLevel, EvChargingSettings } from "../../lib/types";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
+import { detectDeviceCategory } from "./categoryDetection";
 import {
   sensorMatchScore,
   smartMatchPowerSensors,
@@ -21,12 +22,20 @@ export function DeviceSettings({
   onSaved: (home: Home) => void;
 }) {
   const categories = home.deviceCategories ?? [];
+  const [detectedCategories] = useState(() =>
+    Object.fromEntries(
+      home.devices.map((d) => [
+        d.entityId,
+        detectDeviceCategory(d, categories, home.powerSensors),
+      ]),
+    ),
+  );
   const [standards, setStandards] = useState(() =>
     Object.fromEntries(
       home.devices.map((d) => [
         d.entityId,
         {
-          category: d.category ?? "",
+          category: d.category ?? detectedCategories[d.entityId],
           watts:
             d.standardWattsOverride == null
               ? ""
@@ -261,12 +270,13 @@ export function DeviceSettings({
       </section>
       <h3>Devices</h3>
       <p className="muted">
-        Choose a category to monitor each device against an estimated standard
-        power draw. A reading at least 50% above standard triggers an alert and,
-        when Anomaly savings and device permissions allow, automatic shutoff.
-        Set watts from the appliance label or its normal operating draw to
-        refine the estimate. Watts measure power; 1,200 W used continuously for
-        one hour is 1.2 kWh.
+        Recognized appliances have a category selected automatically. Review or
+        change it before saving, and choose a category for unrecognized devices
+        to monitor their estimated standard power draw. A reading at least 50%
+        above standard triggers an alert and, when Anomaly savings and device
+        permissions allow, automatic shutoff. Set watts from the appliance label
+        or its normal operating draw to refine the estimate. Watts measure
+        power; 1,200 W used continuously for one hour is 1.2 kWh.
       </p>
       <label className="field">
         Find a device
@@ -332,6 +342,13 @@ export function DeviceSettings({
                         ))}
                       </Select>
                     </label>
+                    {detectedCategories[d.entityId] &&
+                      standards[d.entityId].category ===
+                        detectedCategories[d.entityId] && (
+                        <small className="muted">
+                          Auto-detected category — review before saving
+                        </small>
+                      )}
                     {standards[d.entityId].category && (
                       <>
                         <label className="field">

@@ -44,7 +44,7 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
             ? (double?)Math.Max(0, watts - actions.Sum(action => action.PowerWatts))
             : null;
         return new(home.Id, home.Name, online, home.Revoked, home.LastSeenUtc, currentWatts, limitWatts, projected,
-            home.Devices.Where(d => d.Present).OrderBy(d => d.Name).Select(d => new DeviceDto(d.EntityId, d.Name, online ? d.State : "unavailable", online ? d.PowerWatts : null, d.Allowed, recommendations.Contains(d.EntityId), d.PowerSensorId, d.ThermostatMinF, d.ThermostatMaxF, d.Allowed ? d.ShutoffLevel : ShutoffLevels.Never, SmartPanelCircuit.IsCircuit(d.EntityId), d.EvCurrentEntityId is { } currentId ? new(currentId, d.EvWattsPerAmp) : null, online ? EvControl(home, d) : null, CircuitPriority(home, d, online), EvBattery(d) ?? detectedEvBatteries.GetValueOrDefault(d.EntityId), d.Category, DevicePowerStandards.StandardWatts(d), d.StandardWattsOverride, DevicePowerStandards.StandardWatts(d) * DevicePowerStandards.TriggerMultiplier)).ToList(),
+            home.Devices.Where(d => d.Present).OrderBy(d => d.Name).Select(d => new DeviceDto(d.EntityId, d.Name, online ? d.State : "unavailable", online ? d.PowerWatts : null, d.Allowed, recommendations.Contains(d.EntityId), d.PowerSensorId, d.ThermostatMinF, d.ThermostatMaxF, d.Allowed ? d.ShutoffLevel : ShutoffLevels.Never, SmartPanelCircuit.IsCircuit(d.EntityId), d.EvCurrentEntityId is { } currentId ? new(currentId, d.EvWattsPerAmp) : null, online ? EvControl(home, d) : null, CircuitPriority(home, d, online), EvBattery(d) ?? detectedEvBatteries.GetValueOrDefault(d.EntityId), d.Category, DevicePowerStandards.StandardWatts(d), d.StandardWattsOverride, DevicePowerStandards.StandardWatts(d) * DevicePowerStandards.TriggerMultiplier, d.PowerStandardConfigured)).ToList(),
             home.Commands.OrderByDescending(c => c.CreatedUtc).Take(30).Select(Dto).ToList(), home.BaseUrl, home.HouseholdPowerSensorId, home.AllowFutureDevices, Sensors(home), home.PowerSource, home.SmartPowerOffEnabled, smartStatus,
             AutoRestorePolicy.Ordered(home.Devices.Where(d => d.RestoreEntry != null))
                 .Select(d => new RestoreQueueDto(d.EntityId, d.Name, AutoRestorePolicy.Estimate(home, d), d.RestoreEntry!.QueuedUtc,
@@ -133,6 +133,8 @@ public sealed partial class PlatformService(IPlatformRepository repository, ISma
         foreach (var device in home.Devices)
         {
             ApplyEvSettings(home, device, request);
+            if (request.DevicePowerStandards?.ContainsKey(device.EntityId) == true)
+                device.PowerStandardConfigured = true;
             if (request.DevicePowerStandards?.TryGetValue(device.EntityId, out var standard) == true &&
                 (device.Category != standard?.Category || device.StandardWattsOverride != standard?.StandardWatts))
             {
